@@ -4,7 +4,8 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getEmailHealth, handleNotifyRequest } from './server/notifyCore.ts';
+import { getEmailHealth } from './api/health.ts';
+import { handleNotifyRequest } from './api/notify.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,8 +20,16 @@ async function startServer() {
   });
 
   app.post('/api/notify', async (req: Request, res: Response) => {
-    const result = await handleNotifyRequest(req.headers.authorization, req.body);
-    res.status(result.status).json(result.body);
+    try {
+      const result = await handleNotifyRequest(req.headers.authorization, req.body);
+      res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('[server /api/notify] Unhandled error:', err);
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : 'Internal notification server error.',
+      });
+    }
   });
 
   if (process.env.NODE_ENV !== 'production') {
