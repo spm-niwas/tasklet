@@ -106,8 +106,9 @@ service cloud.firestore {
     // COLLECTION RULES
     // =========================================================================
     match /authorized_users/{userEmail} {
-      // Only Admin and Admin-added members can view the team directory to pick supervisors
-      allow get, list: if isAuthorizedMember();
+      // Only Admin and Admin-added members can list the directory; signed-in users may check only their own record
+      allow get: if isAuthorizedMember() || (isSignedIn() && request.auth.token.email == userEmail);
+      allow list: if isAuthorizedMember();
 
       allow create: if isValidEmailId(userEmail)
         && isAdmin()

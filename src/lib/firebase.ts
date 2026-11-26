@@ -1,9 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
-  browserLocalPersistence,
   getAuth,
   GoogleAuthProvider,
-  setPersistence,
 } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -14,10 +12,6 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-
-setPersistence(auth, browserLocalPersistence).catch((err) => {
-  console.warn('Firebase auth persistence setup warning:', err);
-});
 
 export enum OperationType {
   CREATE = 'create',

@@ -248,28 +248,54 @@ export default function App() {
   // Firebase Auth state observer + automatic embedded preview fallback
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (!fbUser || !fbUser.email) {
-        if (embeddedPreview) {
-          enterPreviewMode('arjun');
-        } else {
-          setIsPreviewMode(false);
-          setUser(null);
-          setTasklets([]);
-          setAuthorizedUsers([{ email: HARDCODED_ADMIN_EMAIL, name: 'Director' }]);
-          setUserPreference(buildDefaultPreference(''));
-          setSelectedId(null);
+      try {
+        if (!fbUser || !fbUser.email) {
+          if (embeddedPreview) {
+            enterPreviewMode('arjun');
+          } else {
+            setIsPreviewMode(false);
+            setUser(null);
+            setTasklets([]);
+            setAuthorizedUsers([{ email: HARDCODED_ADMIN_EMAIL, name: 'Director' }]);
+            setUserPreference(buildDefaultPreference(''));
+            setSelectedId(null);
+          }
+          return;
         }
-        setAuthReady(true);
-        return;
-      }
 
-      const normalizedEmail = fbUser.email.trim().toLowerCase();
-      const admin = isAdminEmail(normalizedEmail);
+        const normalizedEmail = fbUser.email.trim().toLowerCase();
+        const admin = isAdminEmail(normalizedEmail);
 
-      if (!admin) {
-        const userDocPath = `authorized_users/${normalizedEmail}`;
-        try {
-          const snap = await getDoc(doc(db, 'authorized_users', normalizedEmail));
+        if (!admin) {
+          const userDocPath = `authorized_users/${normalizedEmail}`;
+          let snap;
+          try {
+            snap = await getDoc(doc(db, 'authorized_users', normalizedEmail));
+          } catch (err) {
+            const rawErr = err instanceof Error ? err.message : String(err);
+            if (
+              rawErr.toLowerCase().includes('permission') ||
+              rawErr.toLowerCase().includes('insufficient')
+            ) {
+              setLoginError(
+                `Access denied for ${normalizedEmail}. Only accounts added by ${HARDCODED_ADMIN_EMAIL} can sign in.`
+              );
+            } else {
+              try {
+                handleFirestoreError(err, OperationType.GET, userDocPath);
+              } catch {
+                // Logged for diagnostics; keep UI recoverable below
+              }
+              setLoginError(
+                'Unable to verify your account right now. Please check your connection and try again.'
+              );
+            }
+            await signOut(auth);
+            setIsPreviewMode(false);
+            setUser(null);
+            return;
+          }
+
           if (!snap.exists()) {
             setLoginError(
               `Access denied for ${normalizedEmail}. Only accounts added by ${HARDCODED_ADMIN_EMAIL} can sign in.`
@@ -277,9 +303,9 @@ export default function App() {
             await signOut(auth);
             setIsPreviewMode(false);
             setUser(null);
-            setAuthReady(true);
             return;
           }
+
           const data = snap.data() as Partial<AuthorizedUser> | undefined;
           const resolvedName =
             fbUser.displayName?.trim() ||
@@ -294,24 +320,22 @@ export default function App() {
             isAdmin: false,
           });
           setUserPreference(buildDefaultPreference(normalizedEmail));
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, userDocPath);
+        } else {
+          setLoginError(null);
+          setIsPreviewMode(false);
+          setUser({
+            uid: fbUser.uid,
+            email: normalizedEmail,
+            name: fbUser.displayName?.trim() || 'Director',
+            photoURL: fbUser.photoURL ?? '',
+            isAdmin: true,
+          });
+          setTasklets([]);
+          setUserPreference(buildDefaultPreference(normalizedEmail));
         }
-      } else {
-        setLoginError(null);
-        setIsPreviewMode(false);
-        setUser({
-          uid: fbUser.uid,
-          email: normalizedEmail,
-          name: fbUser.displayName?.trim() || 'Director',
-          photoURL: fbUser.photoURL ?? '',
-          isAdmin: true,
-        });
-        setTasklets([]);
-        setUserPreference(buildDefaultPreference(normalizedEmail));
+      } finally {
+        setAuthReady(true);
       }
-
-      setAuthReady(true);
     });
 
     return () => unsubscribe();
@@ -581,7 +605,6 @@ export default function App() {
     setIsSigningIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      showToast('Signed in with Google.');
     } catch (err) {
       const friendly = formatAuthErrorMessage(err);
       setLoginError(friendly);
