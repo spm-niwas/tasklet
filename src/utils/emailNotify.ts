@@ -36,6 +36,7 @@ export interface EmailSendResult {
   deliveredCount: number;
   failedCount: number;
   skippedPreview?: boolean;
+  error?: string;
 }
 
 export async function sendEmailNotification(payload: NotifyEmailPayload): Promise<EmailSendResult> {
@@ -47,6 +48,7 @@ export async function sendEmailNotification(payload: NotifyEmailPayload): Promis
       deliveredCount: 0,
       failedCount: 0,
       skippedPreview: true,
+      error: 'Live emails are skipped in Design Preview.',
     };
   }
 
@@ -61,28 +63,37 @@ export async function sendEmailNotification(payload: NotifyEmailPayload): Promis
       body: JSON.stringify(payload),
     });
 
+    let data: Partial<EmailSendResult> & { error?: string } = {};
+    try {
+      data = (await res.json()) as Partial<EmailSendResult> & { error?: string };
+    } catch {
+      data = {};
+    }
+
     if (!res.ok) {
       return {
         configured: false,
         delivered: false,
         deliveredCount: 0,
         failedCount: 1,
+        error: data.error || `Notification server error (${res.status}).`,
       };
     }
 
-    const data = (await res.json()) as Partial<EmailSendResult>;
     return {
       configured: Boolean(data.configured),
       delivered: Boolean(data.delivered),
       deliveredCount: Number(data.deliveredCount || 0),
       failedCount: Number(data.failedCount || 0),
+      error: data.error,
     };
-  } catch {
+  } catch (err) {
     return {
       configured: false,
       delivered: false,
       deliveredCount: 0,
       failedCount: 1,
+      error: err instanceof Error ? err.message : 'Network error calling email service.',
     };
   }
 }

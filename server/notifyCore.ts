@@ -58,14 +58,15 @@ function loadFirebaseProjectId(): string {
   return (process.env.FIREBASE_PROJECT_ID || '').trim();
 }
 
-function ensureFirebaseAdminInitialized(): void {
-  const projectId = loadFirebaseProjectId();
-  if (!projectId) return;
-  if (getApps().length === 0) {
-    initializeApp({ projectId });
-  } else {
+function ensureFirebaseAdminInitialized(): boolean {
+  if (getApps().length > 0) {
     getApp();
+    return true;
   }
+  const projectId = loadFirebaseProjectId();
+  if (!projectId) return false;
+  initializeApp({ projectId });
+  return true;
 }
 
 function cleanOptionalString(val: unknown, maxLen: number): string | undefined {
@@ -81,41 +82,59 @@ function cleanOptionalEmail(val: unknown): string | undefined {
   return str;
 }
 
-function parseSafeAppsScriptUrl(rawUrl: string): string | null {
+function parseSafeAppsScriptUrl(rawUrl: string): { url: string | null; reason?: string } {
   const trimmed = rawUrl.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return { url: null, reason: 'APPS_SCRIPT_URL is not configured on the server.' };
+  }
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'https:') return null;
+    if (parsed.protocol !== 'https:') {
+      return { url: null, reason: 'APPS_SCRIPT_URL must start with https://.' };
+    }
     const host = parsed.hostname.toLowerCase();
     if (host !== 'script.google.com' && host !== 'script.googleusercontent.com') {
-      return null;
+      return {
+        url: null,
+        reason: 'APPS_SCRIPT_URL must point to script.google.com.',
+      };
     }
-    return parsed.toString();
+    if (host === 'script.google.com' && !parsed.pathname.endsWith('/exec')) {
+      return {
+        url: null,
+        reason: 'APPS_SCRIPT_URL must be the deployed Web App URL ending in /exec.',
+      };
+    }
+    return { url: parsed.toString() };
   } catch {
-    return null;
+    return { url: null, reason: 'APPS_SCRIPT_URL is not a valid URL.' };
   }
 }
 
 function getEmailTransportConfig(): {
   configured: boolean;
+  reason?: string;
   appsScriptUrl?: string;
   appsScriptSecret?: string;
   senderName: string;
 } {
-  const appsScriptUrl = parseSafeAppsScriptUrl(process.env.APPS_SCRIPT_URL || '');
+  const urlCheck = parseSafeAppsScriptUrl(process.env.APPS_SCRIPT_URL || '');
   const appsScriptSecret = (process.env.APPS_SCRIPT_SECRET || '').trim();
 
-  if (appsScriptUrl) {
+  if (!urlCheck.url) {
     return {
-      configured: true,
-      appsScriptUrl,
-      appsScriptSecret,
+      configured: false,
+      reason: urlCheck.reason,
       senderName: 'NIWAS Tasklet',
     };
   }
 
-  return { configured: false, senderName: 'NIWAS Tasklet' };
+  return {
+    configured: true,
+    appsScriptUrl: urlCheck.url,
+    appsScriptSecret,
+    senderName: 'NIWAS Tasklet',
+  };
 }
 
 function resolveSafeAppUrl(): string {
@@ -138,6 +157,7 @@ async function deliverEmails(messages: EmailMessageSpec[]): Promise<{
   configured: boolean;
   deliveredCount: number;
   failedCount: number;
+  lastError?: string;
 }> {
   if (messages.length === 0) {
     return { configured: true, deliveredCount: 0, failedCount: 0 };
@@ -145,11 +165,17 @@ async function deliverEmails(messages: EmailMessageSpec[]): Promise<{
 
   const cfg = getEmailTransportConfig();
   if (!cfg.configured || !cfg.appsScriptUrl) {
-    return { configured: false, deliveredCount: 0, failedCount: 0 };
+    return {
+      configured: false,
+      deliveredCount: 0,
+      failedCount: messages.length,
+      lastError: cfg.reason || 'Email delivery is not configured on the server.',
+    };
   }
 
   let deliveredCount = 0;
   let failedCount = 0;
+  let lastError: string | undefined;
 
   for (const msg of messages) {
     const controller = new AbortController();
@@ -173,7 +199,7 @@ async function deliverEmails(messages: EmailMessageSpec[]): Promise<{
       });
       const bodyText = await resp.text();
       if (!resp.ok) {
-        throw new Error(`Apps Script HTTP ${resp.status}: ${bodyText.slice(0, 300)}`);
+        throw new Error(`Apps Script HTTP ${resp.status}`);
       }
       let parsedJson: { ok?: boolean; error?: string } | null = null;
       try {
@@ -182,28 +208,34 @@ async function deliverEmails(messages: EmailMessageSpec[]): Promise<{
         parsedJson = null;
       }
       if (parsedJson && parsedJson.ok === false) {
-        throw new Error(parsedJson.error || 'Apps Script rejected email request');
+        throw new Error(parsedJson.error || 'Apps Script rejected email request.');
       }
       if (!parsedJson && bodyText.trim().startsWith('<')) {
         throw new Error(
-          'Apps Script returned HTML instead of JSON. Deploy as Web App with access "Anyone" and use the /exec URL.'
+          'Apps Script returned a login/HTML page instead of JSON. In Apps Script Deploy settings, set "Who has access" to "Anyone" and use the /exec URL.'
         );
+      }
+      if (!parsedJson) {
+        throw new Error('Apps Script returned an unexpected response.');
       }
       deliveredCount++;
     } catch (err) {
       failedCount++;
+      lastError = err instanceof Error ? err.message : 'Failed to deliver email via Apps Script.';
       console.error(`[email] Failed to send Apps Script email to ${msg.to}:`, err);
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  return { configured: true, deliveredCount, failedCount };
+  return { configured: true, deliveredCount, failedCount, lastError };
 }
 
-export function getEmailHealth(): { ok: true; emailConfigured: boolean } {
+export function getEmailHealth(): { ok: true; emailConfigured: boolean; reason?: string } {
   const cfg = getEmailTransportConfig();
-  return { ok: true, emailConfigured: cfg.configured };
+  return cfg.configured
+    ? { ok: true, emailConfigured: true }
+    : { ok: true, emailConfigured: false, reason: cfg.reason };
 }
 
 export interface NotifyHandlerResult {
@@ -225,7 +257,12 @@ export async function handleNotifyRequest(
     return { status: 401, body: { ok: false, error: 'Empty authentication token.' } };
   }
 
-  ensureFirebaseAdminInitialized();
+  if (!ensureFirebaseAdminInitialized()) {
+    return {
+      status: 500,
+      body: { ok: false, error: 'Firebase project configuration is missing on the server.' },
+    };
+  }
 
   let authUser: { uid: string; email: string; name: string };
   try {
@@ -309,6 +346,7 @@ export async function handleNotifyRequest(
       delivered: result.deliveredCount > 0,
       deliveredCount: result.deliveredCount,
       failedCount: result.failedCount,
+      error: result.lastError,
     },
   };
 }

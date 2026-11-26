@@ -36,7 +36,7 @@ import type {
   UserPreference,
   UserProfile,
 } from './types';
-import { sendEmailNotification } from './utils/emailNotify';
+import { sendEmailNotification, type EmailSendResult } from './utils/emailNotify';
 import {
   capitalizeFirst,
   deriveNameFromEmail,
@@ -168,8 +168,24 @@ export default function App() {
     setToasts((prev) => [...prev.slice(-2), { id, message, type }]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2800);
+    }, type === 'error' ? 5000 : 2800);
   }, []);
+
+  const reportEmailResult = useCallback(
+    (res: EmailSendResult, successMessage: string) => {
+      if (res.delivered) {
+        showToast(successMessage);
+        return;
+      }
+      if (res.failedCount > 0 || !res.configured) {
+        showToast(
+          res.error ? `Email not sent: ${res.error}` : 'Email could not be sent.',
+          'error'
+        );
+      }
+    },
+    [showToast]
+  );
 
   const enterPreviewMode = useCallback(
     (role: PreviewRole = 'arjun', notify = false) => {
@@ -681,7 +697,7 @@ export default function App() {
           supervisorEmail,
           supervisorName: supervisorName ?? undefined,
         }).then((res) => {
-          if (res.delivered) showToast(`Notification email sent to ${supervisorName || supervisorEmail}.`);
+          reportEmailResult(res, `Notification email sent to ${supervisorName || supervisorEmail}.`);
         });
       } else if (supervisorEmail && prevSupEmail && supervisorEmail !== prevSupEmail) {
         void sendEmailNotification({
@@ -692,7 +708,7 @@ export default function App() {
           previousSupervisorEmail: prevSupEmail,
           previousSupervisorName: prevSupName ?? undefined,
         }).then((res) => {
-          if (res.delivered) showToast('Supervisor change notification emails sent.');
+          reportEmailResult(res, 'Supervisor change notification emails sent.');
         });
       } else if (!supervisorEmail && prevSupEmail) {
         void sendEmailNotification({
@@ -701,7 +717,7 @@ export default function App() {
           previousSupervisorEmail: prevSupEmail,
           previousSupervisorName: prevSupName ?? undefined,
         }).then((res) => {
-          if (res.delivered) showToast(`Notification email sent to ${prevSupName || prevSupEmail}.`);
+          reportEmailResult(res, `Notification email sent to ${prevSupName || prevSupEmail}.`);
         });
       }
     } catch (err) {
@@ -842,9 +858,7 @@ export default function App() {
           taskletTitle: title,
           taskletDeadlineISO: deadlineISO,
         }).then((res) => {
-          if (res.delivered) {
-            showToast(`Email sent to Supervisor ${supervisorName || supervisorEmail}.`);
-          }
+          reportEmailResult(res, `Email sent to Supervisor ${supervisorName || supervisorEmail}.`);
         });
       }
     } catch (err) {
@@ -941,7 +955,7 @@ export default function App() {
                 taskletDescription: description,
                 resolvedAtISO,
               }).then((res) => {
-                if (res.delivered) showToast(`Resolution email sent to ${recipientName || recipientEmail}.`);
+                reportEmailResult(res, `Resolution email sent to ${recipientName || recipientEmail}.`);
               });
             }
           }
@@ -965,7 +979,7 @@ export default function App() {
       const updated = [...authorizedUsers, payload];
       setAuthorizedUsers(updated);
       savePreviewAuthorizedUsers(updated);
-      showToast(`User "${name}" (${email}) added (Preview).`);
+      showToast(`User "${name}" added (Preview — sign in with Google to send live emails).`);
       return true;
     }
 
@@ -979,7 +993,7 @@ export default function App() {
         targetName: name,
         targetEmail: email,
       }).then((res) => {
-        if (res.delivered) showToast(`Welcome email sent to ${email}.`);
+        reportEmailResult(res, `Welcome email sent to ${email}.`);
       });
       return true;
     } catch (err) {
@@ -1019,7 +1033,7 @@ export default function App() {
             targetName: targetUser.name,
             targetEmail: targetUser.email,
           }).then((res) => {
-            if (res.delivered) showToast(`Removal notice sent to ${targetUser.email}.`);
+            reportEmailResult(res, `Removal notice sent to ${targetUser.email}.`);
           });
         } catch (err) {
           handleFirestoreError(err, OperationType.DELETE, docPath);
@@ -1113,7 +1127,7 @@ export default function App() {
               targetEmail: targetUser.email,
               scopeDescription: emailScopeLabel,
             }).then((res) => {
-              if (res.delivered) showToast(`Data-clear notice sent to ${targetUser.email}.`);
+              reportEmailResult(res, `Data-clear notice sent to ${targetUser.email}.`);
             });
           } catch (err) {
             handleFirestoreError(err, OperationType.DELETE, 'tasklets');
