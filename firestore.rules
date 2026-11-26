@@ -1,0 +1,220 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL PRIMITIVES
+    // =========================================================================
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'director@spmniwas.in';
+    }
+
+    function isAuthorizedNonAdmin() {
+      return isSignedIn()
+        && request.auth.token.email != 'director@spmniwas.in'
+        && exists(/databases/$(database)/documents/authorized_users/$(request.auth.token.email));
+    }
+
+    function isAuthorizedMember() {
+      return isAdmin() || isAuthorizedNonAdmin();
+    }
+
+    function isValidTaskletId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(id) {
+      return id is string && id.size() >= 3 && id.size() <= 160 && id.matches('^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    function isEligibleSupervisorEmail(supEmail, ownerEmail) {
+      return supEmail is string
+        && isValidEmailId(supEmail)
+        && supEmail != ownerEmail
+        && supEmail != 'director@spmniwas.in'
+        && exists(/databases/$(database)/documents/authorized_users/$(supEmail));
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidAuthorizedUser(data) {
+      return data.keys().hasAll(['email', 'name'])
+        && data.keys().hasOnly(['email', 'name', 'addedBy', 'createdAtISO'])
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && (!data.keys().hasAny(['addedBy']) || (data.addedBy is string && data.addedBy.size() <= 160))
+        && (!data.keys().hasAny(['createdAtISO']) || (data.createdAtISO is string && data.createdAtISO.size() <= 40));
+    }
+
+    function isValidUserPreference(data, ownerEmail) {
+      return data.keys().hasAll(['email', 'defaultVisibility'])
+        && data.keys().hasOnly(['email', 'supervisorEmail', 'supervisorName', 'defaultVisibility', 'defaultListScope', 'updatedAtISO'])
+        && data.email == ownerEmail
+        && data.defaultVisibility in ['supervisor', 'private']
+        && (!data.keys().hasAny(['defaultListScope']) || data.defaultListScope in ['all', 'supervisor', 'mine'])
+        && (!data.keys().hasAny(['updatedAtISO']) || (data.updatedAtISO is string && data.updatedAtISO.size() <= 40))
+        && (
+          (!data.keys().hasAny(['supervisorEmail']) || data.supervisorEmail == null)
+            ? (!data.keys().hasAny(['supervisorName']) || data.supervisorName == null)
+            : (
+              isEligibleSupervisorEmail(data.supervisorEmail, ownerEmail)
+              && (!data.keys().hasAny(['supervisorName']) || data.supervisorName == null || (data.supervisorName is string && data.supervisorName.size() >= 1 && data.supervisorName.size() <= 100))
+            )
+        );
+    }
+
+    function isValidTasklet(data) {
+      return data.keys().hasAll(['id', 'seq', 'title', 'deadlineISO', 'status', 'description', 'createdBy', 'createdByEmail', 'createdByUid', 'createdAtISO', 'visibility'])
+        && data.keys().hasOnly(['id', 'seq', 'title', 'deadlineISO', 'status', 'description', 'resolvedAtISO', 'createdBy', 'createdByEmail', 'createdByUid', 'createdAtISO', 'visibility', 'supervisorEmail', 'supervisorName'])
+        && isValidTaskletId(data.id)
+        && data.seq is int && data.seq >= 1
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 300
+        && data.deadlineISO is string && data.deadlineISO.size() >= 10 && data.deadlineISO.size() <= 40
+        && data.status in ['Active', 'Closed', 'Abandoned']
+        && data.description is string && data.description.size() <= 1500
+        && (!data.keys().hasAny(['resolvedAtISO']) || data.resolvedAtISO == null || (data.resolvedAtISO is string && data.resolvedAtISO.size() <= 40))
+        && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 100
+        && isValidEmailId(data.createdByEmail)
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128
+        && data.createdAtISO is string && data.createdAtISO.size() >= 10 && data.createdAtISO.size() <= 40
+        && data.visibility in ['supervisor', 'private']
+        && (!data.keys().hasAny(['supervisorEmail']) || data.supervisorEmail == null || isValidEmailId(data.supervisorEmail))
+        && (!data.keys().hasAny(['supervisorName']) || data.supervisorName == null || (data.supervisorName is string && data.supervisorName.size() >= 1 && data.supervisorName.size() <= 100));
+    }
+
+    // =========================================================================
+    // COLLECTION RULES
+    // =========================================================================
+    match /authorized_users/{userEmail} {
+      // Only Admin and Admin-added members can view the team directory to pick supervisors
+      allow get, list: if isAuthorizedMember();
+
+      allow create: if isValidEmailId(userEmail)
+        && isAdmin()
+        && isValidAuthorizedUser(incoming())
+        && incoming().email == userEmail;
+
+      allow update: if isValidEmailId(userEmail)
+        && isAdmin()
+        && isValidAuthorizedUser(incoming())
+        && incoming().email == existing().email
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'addedBy']);
+
+      allow delete: if isValidEmailId(userEmail)
+        && isAdmin()
+        && userEmail != 'director@spmniwas.in';
+    }
+
+    match /user_preferences/{userEmail} {
+      allow get: if isValidEmailId(userEmail)
+        && isAuthorizedNonAdmin()
+        && request.auth.token.email == userEmail;
+      allow list: if false;
+
+      allow create, update: if isValidEmailId(userEmail)
+        && isAuthorizedNonAdmin()
+        && request.auth.token.email == userEmail
+        && isValidUserPreference(incoming(), userEmail);
+
+      allow delete: if isValidEmailId(userEmail) && isAdmin();
+    }
+
+    match /counters/tasklet_seq {
+      allow get: if isAuthorizedNonAdmin();
+      allow list: if false;
+      allow create: if isAuthorizedNonAdmin()
+        && incoming().keys().hasAll(['lastSeq'])
+        && incoming().keys().hasOnly(['lastSeq'])
+        && incoming().lastSeq == 1;
+      allow update: if isAuthorizedNonAdmin()
+        && incoming().keys().hasAll(['lastSeq'])
+        && incoming().keys().hasOnly(['lastSeq'])
+        && incoming().lastSeq is int
+        && incoming().lastSeq == existing().lastSeq + 1;
+      allow delete: if false;
+    }
+
+    match /tasklets/{taskletId} {
+      // Only creator or tagged supervisor can get a tasklet; Admin cannot read individual tasklets
+      allow get: if isValidTaskletId(taskletId)
+        && isAuthorizedNonAdmin()
+        && (existing().createdByEmail == request.auth.token.email || existing().supervisorEmail == request.auth.token.email);
+
+      // Creator/supervisor can query their own or supervised tasklets; Admin may query strictly for per-user Clear Data cleanup
+      allow list: if isAdmin() || (
+        isAuthorizedNonAdmin()
+        && (existing().createdByEmail == request.auth.token.email || existing().supervisorEmail == request.auth.token.email)
+      );
+
+      allow create: if isValidTaskletId(taskletId)
+        && isAuthorizedNonAdmin()
+        && isValidTasklet(incoming())
+        && incoming().id == taskletId
+        && incoming().status == 'Active'
+        && (!incoming().keys().hasAny(['resolvedAtISO']) || incoming().resolvedAtISO == null)
+        && incoming().createdByUid == request.auth.uid
+        && incoming().createdByEmail == request.auth.token.email
+        && (
+          (incoming().visibility == 'private' && (!incoming().keys().hasAny(['supervisorEmail']) || incoming().supervisorEmail == null) && (!incoming().keys().hasAny(['supervisorName']) || incoming().supervisorName == null))
+          || (incoming().visibility == 'supervisor' && isEligibleSupervisorEmail(incoming().supervisorEmail, request.auth.token.email))
+        );
+
+      allow update: if isValidTaskletId(taskletId)
+        && isAuthorizedNonAdmin()
+        && isValidTasklet(incoming())
+        && (existing().createdByEmail == request.auth.token.email || existing().supervisorEmail == request.auth.token.email)
+        && incoming().id == existing().id
+        && incoming().seq == existing().seq
+        && incoming().createdAtISO == existing().createdAtISO
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdByEmail == existing().createdByEmail
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().visibility == existing().visibility
+        && incoming().supervisorEmail == existing().supervisorEmail
+        && incoming().supervisorName == existing().supervisorName
+        && existing().status == 'Active'
+        && (
+          // Action: Auto-save description while Active (creator or supervisor)
+          (
+            incoming().status == 'Active'
+            && (!incoming().keys().hasAny(['resolvedAtISO']) || incoming().resolvedAtISO == null)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['description'])
+          ) ||
+          // Action: Resolve (Close or Abandon) with description (creator or supervisor)
+          (
+            (incoming().status == 'Closed' || incoming().status == 'Abandoned')
+            && incoming().resolvedAtISO is string
+            && incoming().description.size() >= 3
+            && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'status', 'resolvedAtISO'])
+          )
+        );
+
+      allow delete: if isValidTaskletId(taskletId) && isAdmin();
+    }
+
+    // Connectivity probe document (read-only for signed-in users)
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+  }
+}

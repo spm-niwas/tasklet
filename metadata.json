@@ -1,0 +1,6 @@
+{
+  "name": "NIWAS Tasklet",
+  "description": "Focused deadline workspace with real-time Firestore sync and role-based Google Sign-In.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

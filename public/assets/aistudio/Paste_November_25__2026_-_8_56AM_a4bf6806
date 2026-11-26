@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIWAS Tasklet</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Hide horizontal scrollbar on mobile filter tabs while keeping touch swipe smooth */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Support iOS/Android bottom safe-area insets */
+        .pb-safe {
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen flex flex-col antialiased selection:bg-emerald-600 selection:text-white overflow-x-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div class="w-full px-3.5 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+            <!-- Brand Title -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm shadow-emerald-600/20 shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 leading-none">NIWAS Tasklet</h1>
+                    <p class="text-[11px] font-medium text-slate-400 mt-0.5">Focused Deadline Workspace</p>
+                </div>
+            </div>
+
+            <!-- Search Bar (16px on mobile prevents iOS Safari auto-zoom) -->
+            <div class="order-3 md:order-2 w-full md:w-[28rem] lg:w-[36rem] xl:w-[42rem] relative">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </span>
+                <input
+                    id="search-input"
+                    type="text"
+                    placeholder="Search tasklets by keywords, description, or #number..."
+                    class="w-full pl-10 pr-9 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-base sm:text-sm text-slate-800 placeholder-slate-400 rounded-xl border border-transparent focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                >
+                <button id="clear-search-btn" type="button" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600" title="Clear search">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Action Controls: Add Tasklet & Settings Gear -->
+            <div class="order-2 md:order-3 flex items-center gap-2">
+                <!-- Primary Add Button -->
+                <button
+                    id="open-add-modal-btn"
+                    type="button"
+                    class="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm shadow-emerald-600/20 transition flex items-center gap-1.5"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    <span class="sm:hidden">Add</span>
+                    <span class="hidden sm:inline">Add Tasklet</span>
+                </button>
+
+                <!-- Settings Gear Menu (Name, Gmail ID & Logout) -->
+                <div class="relative" id="settings-menu-container">
+                    <button
+                        id="settings-gear-btn"
+                        type="button"
+                        title="Account Settings"
+                        aria-label="Account Settings"
+                        class="p-2.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-xl transition flex items-center justify-center"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Card -->
+                    <div
+                        id="settings-dropdown"
+                        class="hidden absolute right-0 mt-2 w-[calc(100vw-1.75rem)] max-w-xs sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-xl py-4 px-4 z-50"
+                    >
+                        <!-- Google Profile Header: Avatar, Name, Email & Role -->
+                        <div class="flex items-start gap-3 pb-3.5 border-b border-slate-100">
+                            <div class="relative shrink-0">
+                                <div id="user-avatar-badge" class="w-11 h-11 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center shadow-xs overflow-hidden">
+                                    D
+                                </div>
+                                <!-- Google Profile Indicator Badge -->
+                                <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white shadow-xs border border-slate-200 flex items-center justify-center" title="Google Account">
+                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24">
+                                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"/>
+                                        <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"/>
+                                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"/>
+                                    </svg>
+                                </span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p id="user-display-name" class="text-sm font-bold text-slate-900 truncate">Director</p>
+                                <p id="user-display-email" class="text-xs text-slate-500 truncate">director@spmniwas.in</p>
+                                <p id="user-role-pill" class="text-xs font-normal text-slate-500 mt-1">Admin</p>
+                            </div>
+                        </div>
+
+                        <div class="pt-2.5 flex flex-col gap-2">
+                            <!-- Admin-Only Menu Items in One Row -->
+                            <div id="admin-whitelist-section" class="hidden grid grid-cols-2 gap-1.5 pb-2 border-b border-slate-100">
+                                <button
+                                    id="toggle-add-user-btn"
+                                    type="button"
+                                    class="w-full px-2.5 py-2 rounded-xl justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 text-xs font-medium transition flex items-center gap-1.5"
+                                >
+                                    <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                                    </svg>
+                                    <span class="truncate">Add User</span>
+                                </button>
+                                <button
+                                    id="toggle-clear-data-btn"
+                                    type="button"
+                                    class="w-full px-2.5 py-2 rounded-xl justify-center text-rose-600 hover:bg-rose-50 text-xs font-medium transition flex items-center gap-1.5"
+                                >
+                                    <svg class="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    <span class="truncate">Clear Data</span>
+                                </button>
+                            </div>
+
+                            <!-- Logout Button at Bottom Right -->
+                            <div class="flex justify-end">
+                                <button
+                                    id="logout-btn"
+                                    type="button"
+                                    class="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-medium transition flex items-center gap-1.5"
+                                >
+                                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                    </svg>
+                                    <span>Logout</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Minimal Google Sign-In Screen (App Name + Login with Google Button Only) -->
+    <div id="logged-out-screen" class="fixed inset-0 z-50 bg-slate-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-sm p-8 text-center space-y-6">
+            <div class="flex flex-col items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-sm shadow-emerald-600/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900">NIWAS Tasklet</h1>
+            </div>
+
+            <button
+                id="google-signin-btn"
+                type="button"
+                class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-300 text-slate-800 text-sm font-semibold shadow-xs transition flex items-center justify-center gap-3"
+            >
+                <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"/>
+                </svg>
+                <span>Login with Google</span>
+            </button>
+
+            <p id="login-error-msg" class="hidden text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2.5"></p>
+        </div>
+    </div>
+
+    <!-- Google Account Chooser Modal (Used when Firebase Google Popup runs locally or selects authorized accounts) -->
+    <div id="google-chooser-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"/>
+                    </svg>
+                    <h3 class="text-sm font-bold text-slate-900">Choose a Google Account</h3>
+                </div>
+                <button id="close-chooser-btn" type="button" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="chooser-account-list" class="space-y-1.5">
+                <!-- Quick-pick authorized accounts -->
+            </div>
+            <form id="custom-google-email-form" class="pt-2 border-t border-slate-100 space-y-2">
+                <label for="google-email-verify-input" class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Or enter Google Email ID</label>
+                <div class="flex gap-2">
+                    <input
+                        id="google-email-verify-input"
+                        type="email"
+                        required
+                        placeholder="name@spmniwas.in"
+                        class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-900 outline-none"
+                    >
+                    <button type="submit" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition">
+                        Continue
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Banner -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Floating Bottom-Left Role Switcher -->
+    <div id="floating-role-switcher" class="fixed bottom-5 left-5 z-40 flex items-center gap-1 p-1.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/80 shadow-xl">
+        <button
+            id="floating-admin-view-btn"
+            type="button"
+            class="px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-emerald-600 text-white shadow-xs"
+        >
+            Admin View
+        </button>
+        <button
+            id="floating-user-view-btn"
+            type="button"
+            class="px-3 py-1.5 rounded-xl text-xs font-semibold transition text-slate-300 hover:text-white hover:bg-slate-800"
+        >
+            User View
+        </button>
+    </div>
+
+    <!-- Main Two-Pane Split Workspace (45% Left / 55% Right on Desktop; Native Two-Screen Flow on Mobile) -->
+    <main class="flex-1 w-full px-3 sm:px-6 py-3 sm:py-4 flex flex-col">
+        <div class="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 items-stretch">
+
+            <!-- LEFT PANE (45% on desktop; full-screen List View on mobile) -->
+            <section id="list-pane" class="w-full lg:w-[45%] bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
+                <!-- 5 Status Filter Tabs with Live Count Badges (3 + 2 maximized grid on mobile, single row on sm+) -->
+                <div class="p-2.5 sm:p-3 border-b border-slate-100 bg-slate-50/60 shrink-0">
+                    <div id="filter-tabs" class="grid grid-cols-6 sm:flex sm:items-center gap-1.5 w-full">
+                        <!-- Tabs rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Tasklet List (Auto-paginated at 25 per page) -->
+                <div id="tasklet-list" class="flex-1 divide-y divide-slate-100 min-h-[360px] sm:min-h-[420px] flex flex-col overflow-y-auto">
+                    <!-- Tasklet cards rendered dynamically -->
+                </div>
+
+                <!-- Pagination Footer (Automatically shown when items > 25) -->
+                <div id="pagination-bar" class="hidden px-4 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 shrink-0">
+                    <span id="pagination-info" class="font-medium">Showing 0 of 0</span>
+                    <div class="flex items-center gap-1.5">
+                        <button id="prev-page-btn" type="button" class="px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none font-medium transition">
+                            Prev
+                        </button>
+                        <span id="page-indicator" class="px-2 font-semibold text-slate-700">1 / 1</span>
+                        <button id="next-page-btn" type="button" class="px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none font-medium transition">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT PANE (55% on desktop; full-screen Detail View on mobile) -->
+            <section id="detail-pane" class="hidden lg:flex w-full lg:w-[55%] bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-7 min-h-[420px] sm:min-h-[460px] flex-col">
+                <!-- Detail view rendered dynamically -->
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ADD TASKLET MODAL -->
+    <div id="add-modal" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl border border-slate-200 shadow-xl w-full max-w-md overflow-hidden sm:my-auto max-h-[92dvh] overflow-y-auto pb-safe sm:pb-0">
+            <div class="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                <h2 class="text-base font-bold text-slate-900">Create New Tasklet</h2>
+                <button id="close-add-modal-btn" type="button" class="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="add-tasklet-form" class="p-5 sm:p-6 space-y-4" novalidate>
+                <!-- Task Name -->
+                <div>
+                    <label for="task-name-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                        Task Name <span class="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                        id="task-name-input"
+                        rows="2"
+                        placeholder="e.g., Finalize quarterly architecture review"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-base sm:text-sm text-slate-900 outline-none transition resize-none leading-snug"
+                        required
+                    ></textarea>
+                </div>
+
+                <!-- Mandatory Deadline Date & Time -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label for="deadline-date-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                            Deadline Date <span class="text-rose-500">*</span>
+                        </label>
+                        <input
+                            id="deadline-date-input"
+                            type="date"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-base sm:text-sm text-slate-900 outline-none transition"
+                            required
+                        >
+                    </div>
+                    <div>
+                        <label for="deadline-time-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                            Deadline Time <span class="text-rose-500">*</span>
+                        </label>
+                        <input
+                            id="deadline-time-input"
+                            type="time"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-base sm:text-sm text-slate-900 outline-none transition"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <!-- Inline Validation Error -->
+                <div id="add-modal-error" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2">
+                    <svg class="w-4 h-4 shrink-0 mt-0.5 text-rose-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span id="add-modal-error-text"></span>
+                </div>
+
+                <!-- Modal Footer Buttons -->
+                <div class="pt-2 flex items-center justify-end gap-2.5">
+                    <button type="button" id="cancel-add-modal-btn" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm shadow-emerald-600/20 transition">
+                        Create Tasklet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CUSTOM CONFIRMATION MODAL (No browser confirm() or alert()) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div class="flex items-start gap-3.5">
+                <div id="confirm-icon-wrap" class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+                    <!-- Icon injected dynamically -->
+                </div>
+                <div>
+                    <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirm Action</h3>
+                    <p id="confirm-message" class="text-sm text-slate-600 mt-1 leading-relaxed"></p>
+                </div>
+            </div>
+            <div class="pt-2 flex items-center justify-end gap-2.5">
+                <button id="confirm-cancel-btn" type="button" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition">
+                    Cancel
+                </button>
+                <button id="confirm-proceed-btn" type="button" class="px-4 py-2 rounded-xl text-white text-sm font-semibold shadow-sm transition">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPLICATION SCRIPT (Firebase Auth & Real-Time Firestore Cloud Sync) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import {
+            getAuth,
+            GoogleAuthProvider,
+            signInWithPopup,
+            signOut,
+            onAuthStateChanged,
+            setPersistence,
+            browserLocalPersistence
+        } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import {
+            getFirestore,
+            collection,
+            doc,
+            getDoc,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            onSnapshot
+        } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        // =========================================================================
+        // FIREBASE CONFIGURATION (niwas-pm Live Keys)
+        // =========================================================================
+        const USER_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyBggJ8HLnuL_AmO28L39A57fV_m04n-NzA",
+            authDomain: "niwas-pm.firebaseapp.com",
+            projectId: "niwas-pm",
+            storageBucket: "niwas-pm.firebasestorage.app",
+            messagingSenderId: "217295743479",
+            appId: "1:217295743479:web:142510cdd7bcb3a31726f2"
+        };
+
+        // Detect whether running in sandboxed preview vs. live GitHub Pages / custom domain
+        const isPreviewSandbox = (
+            window.location.protocol === 'about:' ||
+            window.location.protocol === 'blob:' ||
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('scf.usercontent.goog') ||
+            window.location.hostname.includes('googleusercontent.com') ||
+            window.location.hostname.includes('webcontainer')
+        );
+
+        const hasValidFirebaseConfig = Boolean(
+            USER_FIREBASE_CONFIG.apiKey &&
+            USER_FIREBASE_CONFIG.apiKey.trim().length > 10 &&
+            USER_FIREBASE_CONFIG.appId &&
+            USER_FIREBASE_CONFIG.appId.trim().length > 5
+        );
+
+        let firebaseApp = null;
+        let auth = null;
+        let db = null;
+        let googleProvider = null;
+
+        if (hasValidFirebaseConfig) {
+            try {
+                firebaseApp = initializeApp(USER_FIREBASE_CONFIG);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                googleProvider = new GoogleAuthProvider();
+                googleProvider.setCustomParameters({ prompt: 'select_account' });
+                setPersistence(auth, browserLocalPersistence).catch((err) => {
+                    console.warn('Firebase persistence setup warning:', err);
+                });
+            } catch (err) {
+                console.error('Firebase initialization failed:', err);
+            }
+        }
+
+        // Storage keys & constants
+        const STORAGE_KEY = 'niwas_tasklet_data_v1';
+        const ALLOWED_USERS_KEY = 'niwas_tasklet_allowed_users_v1';
+        const SESSION_KEY = 'niwas_tasklet_session_v1';
+        const HARDCODED_ADMIN_EMAIL = 'director@spmniwas.in';
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+        const ITEMS_PER_PAGE = 25;
+        const MIN_WORDS = 3;
+        const MAX_WORDS = 50;
+
+        // Application State
+        let state = {
+            tasklets: [],
+            activeFilter: 'Active',
+            searchQuery: '',
+            currentPage: 1,
+            selectedId: null,
+            showInlineWarning: false,
+            rightPanelMode: 'tasklet', // 'tasklet' | 'addUser' | 'clearData'
+            mobileView: 'list' // 'list' | 'detail' (used below 1024px)
+        };
+
+        let saveDebounceTimer = null;
+        let pendingConfirmCallback = null;
+        let unsubscribeTasklets = null;
+        let unsubscribeUsers = null;
+
+        // DOM Elements
+        const searchInput = document.getElementById('search-input');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        const filterTabsEl = document.getElementById('filter-tabs');
+        const listPaneEl = document.getElementById('list-pane');
+        const taskletListEl = document.getElementById('tasklet-list');
+        const detailPaneEl = document.getElementById('detail-pane');
+        const paginationBarEl = document.getElementById('pagination-bar');
+        const paginationInfoEl = document.getElementById('pagination-info');
+        const pageIndicatorEl = document.getElementById('page-indicator');
+        const prevPageBtn = document.getElementById('prev-page-btn');
+        const nextPageBtn = document.getElementById('next-page-btn');
+
+        // Add Modal Elements
+        const addModal = document.getElementById('add-modal');
+        const openAddModalBtn = document.getElementById('open-add-modal-btn');
+        const closeAddModalBtn = document.getElementById('close-add-modal-btn');
+        const cancelAddModalBtn = document.getElementById('cancel-add-modal-btn');
+        const addTaskletForm = document.getElementById('add-tasklet-form');
+        const taskNameInput = document.getElementById('task-name-input');
+        const deadlineDateInput = document.getElementById('deadline-date-input');
+        const deadlineTimeInput = document.getElementById('deadline-time-input');
+        const addModalError = document.getElementById('add-modal-error');
+        const addModalErrorText = document.getElementById('add-modal-error-text');
+
+        // Confirm Modal Elements
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmIconWrap = document.getElementById('confirm-icon-wrap');
+        const confirmTitle = document.getElementById('confirm-title');
+        const confirmMessage = document.getElementById('confirm-message');
+        const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+        const confirmProceedBtn = document.getElementById('confirm-proceed-btn');
+
+        // Settings & Auth Elements
+        const settingsMenuContainer = document.getElementById('settings-menu-container');
+        const settingsGearBtn = document.getElementById('settings-gear-btn');
+        const settingsDropdown = document.getElementById('settings-dropdown');
+        const userAvatarBadge = document.getElementById('user-avatar-badge');
+        const userDisplayName = document.getElementById('user-display-name');
+        const userDisplayEmail = document.getElementById('user-display-email');
+        const userRolePill = document.getElementById('user-role-pill');
+        const adminWhitelistSection = document.getElementById('admin-whitelist-section');
+        const toggleAddUserBtn = document.getElementById('toggle-add-user-btn');
+        const toggleClearDataBtn = document.getElementById('toggle-clear-data-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const floatingRoleSwitcher = document.getElementById('floating-role-switcher');
+        const floatingAdminViewBtn = document.getElementById('floating-admin-view-btn');
+        const floatingUserViewBtn = document.getElementById('floating-user-view-btn');
+
+        // Login & Google Chooser Elements
+        const loggedOutScreen = document.getElementById('logged-out-screen');
+        const googleSigninBtn = document.getElementById('google-signin-btn');
+        const loginErrorMsg = document.getElementById('login-error-msg');
+        const googleChooserModal = document.getElementById('google-chooser-modal');
+        const closeChooserBtn = document.getElementById('close-chooser-btn');
+        const chooserAccountList = document.getElementById('chooser-account-list');
+        const customGoogleEmailForm = document.getElementById('custom-google-email-form');
+        const googleEmailVerifyInput = document.getElementById('google-email-verify-input');
+
+        let allowedUsers = [{ email: HARDCODED_ADMIN_EMAIL, name: 'Director' }];
+        let userProfile = null;
+        let previewRole = 'admin';
+
+        function isAdminEmail(email) {
+            return (email || '').trim().toLowerCase() === HARDCODED_ADMIN_EMAIL;
+        }
+
+        // =========================================================================
+        // FIRESTORE REAL-TIME LISTENERS & CLOUD SYNC HELPERS
+        // =========================================================================
+        function canUseFirestore() {
+            return Boolean(db && auth && auth.currentUser);
+        }
+
+        function startFirestoreSync() {
+            if (!canUseFirestore()) return;
+
+            if (unsubscribeUsers) unsubscribeUsers();
+            unsubscribeUsers = onSnapshot(
+                collection(db, 'authorized_users'),
+                (snapshot) => {
+                    const map = new Map();
+                    map.set(HARDCODED_ADMIN_EMAIL, {
+                        email: HARDCODED_ADMIN_EMAIL,
+                        name: 'Director'
+                    });
+                    snapshot.forEach((docSnap) => {
+                        const data = docSnap.data() || {};
+                        const email = (data.email || docSnap.id || '').trim().toLowerCase();
+                        if (email) {
+                            map.set(email, {
+                                email,
+                                name: capitalizeFirst(String(data.name || deriveNameFromEmail(email)).trim())
+                            });
+                        }
+                    });
+                    allowedUsers = Array.from(map.values());
+                    saveAllowedUsersLocal();
+                    if (state.rightPanelMode === 'addUser') {
+                        renderAddUserRightPanel();
+                    }
+                },
+                (err) => {
+                    console.error('Firestore authorized_users listener error:', err);
+                }
+            );
+
+            if (unsubscribeTasklets) unsubscribeTasklets();
+            unsubscribeTasklets = onSnapshot(
+                collection(db, 'tasklets'),
+                (snapshot) => {
+                    const cloudTasklets = [];
+                    snapshot.forEach((docSnap) => {
+                        cloudTasklets.push({
+                            id: docSnap.id,
+                            ...docSnap.data()
+                        });
+                    });
+                    state.tasklets = cloudTasklets;
+                    saveToLocalStorage();
+                    if (!state.selectedId && state.tasklets.length > 0) {
+                        const sorted = getFilteredTasklets();
+                        state.selectedId = sorted.length > 0 ? sorted[0].id : state.tasklets[0].id;
+                    }
+                    // Preserve focus & active typing in the description textarea during Firestore snapshot updates
+                    const activeEl = document.activeElement;
+                    if (activeEl && activeEl.id === 'detail-description-input') {
+                        renderFilterTabs();
+                        renderTaskletList();
+                    } else {
+                        renderAll();
+                    }
+                },
+                (err) => {
+                    console.error('Firestore tasklets listener error:', err);
+                }
+            );
+        }
+
+        function stopFirestoreSync() {
+            if (unsubscribeTasklets) {
+                unsubscribeTasklets();
+                unsubscribeTasklets = null;
+            }
+            if (unsubscribeUsers) {
+                unsubscribeUsers();
+                unsubscribeUsers = null;
+            }
+        }
+
+        async function syncTaskletToCloud(tasklet) {
+            saveToLocalStorage();
+            if (!canUseFirestore() || !tasklet || !tasklet.id) return;
+            try {
+                await setDoc(doc(db, 'tasklets', tasklet.id), tasklet, { merge: true });
+            } catch (err) {
+                console.error('Failed to sync tasklet to Firestore:', err);
+                showToast('Cloud sync failed. Saved locally.', 'error');
+            }
+        }
+
+        async function syncAuthorizedUserToCloud(userObj) {
+            saveAllowedUsersLocal();
+            if (!canUseFirestore() || !userObj || !userObj.email) return;
+            try {
+                await setDoc(doc(db, 'authorized_users', userObj.email), userObj, { merge: true });
+            } catch (err) {
+                console.error('Failed to add authorized user in Firestore:', err);
+                showToast('Cloud user sync failed.', 'error');
+            }
+        }
+
+        async function removeAuthorizedUserFromCloud(email) {
+            saveAllowedUsersLocal();
+            if (!canUseFirestore() || !email || isAdminEmail(email)) return;
+            try {
+                await deleteDoc(doc(db, 'authorized_users', email));
+            } catch (err) {
+                console.error('Failed to remove authorized user from Firestore:', err);
+                showToast('Cloud user removal failed.', 'error');
+            }
+        }
+
+        // =========================================================================
+        // USER ALLOWLIST & SESSION MANAGEMENT (7-DAY PERSISTENCE)
+        // =========================================================================
+        function loadAllowedUsers() {
+            try {
+                const raw = localStorage.getItem(ALLOWED_USERS_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        const normalizedMap = new Map();
+                        parsed.forEach((entry) => {
+                            if (typeof entry === 'string') {
+                                const cleanEmail = entry.trim().toLowerCase();
+                                if (cleanEmail) {
+                                    normalizedMap.set(cleanEmail, {
+                                        email: cleanEmail,
+                                        name: deriveNameFromEmail(cleanEmail)
+                                    });
+                                }
+                            } else if (entry && typeof entry === 'object' && entry.email) {
+                                const cleanEmail = String(entry.email).trim().toLowerCase();
+                                if (cleanEmail) {
+                                    normalizedMap.set(cleanEmail, {
+                                        email: cleanEmail,
+                                        name: capitalizeFirst(String(entry.name || deriveNameFromEmail(cleanEmail)).trim())
+                                    });
+                                }
+                            }
+                        });
+                        normalizedMap.set(HARDCODED_ADMIN_EMAIL, {
+                            email: HARDCODED_ADMIN_EMAIL,
+                            name: 'Director'
+                        });
+                        allowedUsers = Array.from(normalizedMap.values());
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load allowed users:', err);
+            }
+            allowedUsers = [{ email: HARDCODED_ADMIN_EMAIL, name: 'Director' }];
+            saveAllowedUsersLocal();
+        }
+
+        function saveAllowedUsersLocal() {
+            if (!allowedUsers.some((u) => isAdminEmail(u.email))) {
+                allowedUsers.unshift({ email: HARDCODED_ADMIN_EMAIL, name: 'Director' });
+            }
+            try {
+                localStorage.setItem(ALLOWED_USERS_KEY, JSON.stringify(allowedUsers));
+            } catch (err) {
+                console.error('Failed to save allowed users:', err);
+            }
+        }
+
+        function deriveNameFromEmail(email) {
+            if (isAdminEmail(email)) return 'Director';
+            const existing = allowedUsers.find((u) => u.email === (email || '').trim().toLowerCase());
+            if (existing && existing.name) return existing.name;
+            const localPart = (email || '').split('@')[0] || 'Member';
+            return localPart
+                .split(/[._-]+/)
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+        }
+
+        function saveSession() {
+            try {
+                if (userProfile) {
+                    const sessionPayload = {
+                        ...userProfile,
+                        expiresAt: Date.now() + SEVEN_DAYS_MS
+                    };
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(sessionPayload));
+                } else {
+                    localStorage.removeItem(SESSION_KEY);
+                }
+            } catch (err) {
+                console.error('Failed to persist session:', err);
+            }
+        }
+
+        function loadSession() {
+            try {
+                const raw = localStorage.getItem(SESSION_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.email) {
+                        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+                            localStorage.removeItem(SESSION_KEY);
+                            userProfile = null;
+                            return;
+                        }
+                        const cleanEmail = parsed.email.trim().toLowerCase();
+                        const matchedUser = allowedUsers.find((u) => u.email === cleanEmail);
+                        if (matchedUser) {
+                            userProfile = {
+                                name: parsed.name || matchedUser.name || deriveNameFromEmail(cleanEmail),
+                                email: cleanEmail,
+                                photoURL: parsed.photoURL || ''
+                            };
+                            previewRole = isAdminEmail(cleanEmail) ? 'admin' : 'user';
+                            return;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load session:', err);
+            }
+            // Default to signed-in Admin only in sandboxed design preview; enforce real Google Sign-In on GitHub Pages / live hosting
+            if (isPreviewSandbox) {
+                userProfile = {
+                    name: 'Director',
+                    email: HARDCODED_ADMIN_EMAIL,
+                    photoURL: ''
+                };
+                previewRole = 'admin';
+                saveSession();
+            } else {
+                userProfile = null;
+            }
+        }
+
+        function updateUserProfileUI() {
+            if (!userProfile) {
+                loggedOutScreen.classList.remove('hidden');
+                floatingRoleSwitcher.classList.add('hidden');
+                return;
+            }
+
+            loggedOutScreen.classList.add('hidden');
+            // Show floating role switcher only in design preview; keep hidden on GitHub Pages / live site
+            floatingRoleSwitcher.classList.toggle('hidden', !isPreviewSandbox);
+
+            const showAdminUI = isPreviewSandbox
+                ? previewRole === 'admin'
+                : isAdminEmail(userProfile.email);
+            const displayName = userProfile.name || deriveNameFromEmail(userProfile.email);
+            const initial = displayName.charAt(0).toUpperCase() || 'D';
+            const livePhotoURL = userProfile.photoURL || (auth && auth.currentUser && auth.currentUser.photoURL) || '';
+
+            if (livePhotoURL) {
+                userAvatarBadge.innerHTML = `<img src="${escapeHTML(livePhotoURL)}" alt="${escapeHTML(displayName)}" referrerpolicy="no-referrer" class="w-full h-full object-cover rounded-full" onerror="this.parentElement.textContent='${escapeHTML(initial)}'">`;
+            } else {
+                userAvatarBadge.textContent = initial;
+            }
+            userDisplayName.textContent = displayName;
+            userDisplayEmail.textContent = userProfile.email;
+
+            if (showAdminUI) {
+                userRolePill.textContent = 'Admin';
+                userRolePill.className = 'text-xs font-normal text-slate-500 mt-1';
+                floatingAdminViewBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-emerald-600 text-white shadow-xs';
+                floatingUserViewBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold transition text-slate-300 hover:text-white hover:bg-slate-800';
+            } else {
+                userRolePill.textContent = 'User';
+                userRolePill.className = 'text-xs font-normal text-slate-500 mt-1';
+                floatingUserViewBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-emerald-600 text-white shadow-xs';
+                floatingAdminViewBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold transition text-slate-300 hover:text-white hover:bg-slate-800';
+            }
+
+            adminWhitelistSection.classList.toggle('hidden', !showAdminUI);
+            if (!showAdminUI && (state.rightPanelMode === 'addUser' || state.rightPanelMode === 'clearData')) {
+                state.rightPanelMode = 'tasklet';
+            }
+        }
+
+        function switchPreviewRole(role) {
+            previewRole = role;
+            if (role === 'admin') {
+                userProfile = {
+                    name: 'Director',
+                    email: HARDCODED_ADMIN_EMAIL
+                };
+            } else {
+                const consultant = allowedUsers.find((u) => !isAdminEmail(u.email));
+                userProfile = consultant
+                    ? { name: consultant.name, email: consultant.email }
+                    : { name: 'Consultant Member', email: 'consultant@spmniwas.in' };
+            }
+            saveSession();
+            updateUserProfileUI();
+            renderAll();
+        }
+
+        async function attemptGoogleLogin(emailInput, customDisplayName, customPhotoURL) {
+            const normalizedEmail = (emailInput || '').trim().toLowerCase();
+            loginErrorMsg.classList.add('hidden');
+
+            if (!normalizedEmail) {
+                return;
+            }
+
+            let authorizedEntry = allowedUsers.find((u) => u.email === normalizedEmail);
+
+            // On a new device/browser, verify directly against Firestore authorized_users collection
+            if (!authorizedEntry && !isAdminEmail(normalizedEmail) && canUseFirestore()) {
+                try {
+                    const userDocSnap = await getDoc(doc(db, 'authorized_users', normalizedEmail));
+                    if (userDocSnap.exists()) {
+                        const data = userDocSnap.data() || {};
+                        authorizedEntry = {
+                            email: normalizedEmail,
+                            name: capitalizeFirst(String(data.name || deriveNameFromEmail(normalizedEmail)).trim())
+                        };
+                        allowedUsers.push(authorizedEntry);
+                        saveAllowedUsersLocal();
+                    }
+                } catch (err) {
+                    console.warn('Firestore authorization lookup:', err);
+                }
+            }
+
+            if (!authorizedEntry && !isAdminEmail(normalizedEmail)) {
+                googleChooserModal.classList.add('hidden');
+                loginErrorMsg.textContent = `Access denied for ${normalizedEmail}. Only accounts added by ${HARDCODED_ADMIN_EMAIL} can sign in.`;
+                loginErrorMsg.classList.remove('hidden');
+                if (auth && auth.currentUser) {
+                    signOut(auth).catch(() => {});
+                }
+                return;
+            }
+
+            const resolvedPhotoURL = customPhotoURL || (auth && auth.currentUser && auth.currentUser.photoURL) || (userProfile && userProfile.email === normalizedEmail ? userProfile.photoURL : '') || '';
+
+            userProfile = {
+                name: customDisplayName || (authorizedEntry && authorizedEntry.name) || deriveNameFromEmail(normalizedEmail),
+                email: normalizedEmail,
+                photoURL: resolvedPhotoURL
+            };
+            previewRole = isAdminEmail(normalizedEmail) ? 'admin' : 'user';
+            saveSession();
+            googleChooserModal.classList.add('hidden');
+            updateUserProfileUI();
+            startFirestoreSync();
+            showToast(`Signed in as ${userProfile.email}`);
+        }
+
+        async function triggerFirebaseGoogleSignIn() {
+            if (!auth || !googleProvider) {
+                openGoogleAccountChooser();
+                return;
+            }
+            loginErrorMsg.classList.add('hidden');
+            try {
+                const result = await signInWithPopup(auth, googleProvider);
+                const fbUser = result.user;
+                if (fbUser && fbUser.email) {
+                    attemptGoogleLogin(fbUser.email, fbUser.displayName || '', fbUser.photoURL || '');
+                }
+            } catch (err) {
+                console.error('Google Sign-In error:', err);
+                loginErrorMsg.textContent = err.message || 'Google Sign-In was cancelled or failed.';
+                loginErrorMsg.classList.remove('hidden');
+            }
+        }
+
+        function openGoogleAccountChooser() {
+            loginErrorMsg.classList.add('hidden');
+            googleEmailVerifyInput.value = '';
+            chooserAccountList.innerHTML = allowedUsers
+                .map((userObj) => {
+                    const email = userObj.email;
+                    const displayName = userObj.name || deriveNameFromEmail(email);
+                    const admin = isAdminEmail(email);
+                    return `
+                        <button
+                            type="button"
+                            data-choose-email="${escapeHTML(email)}"
+                            class="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 border border-slate-200/80 text-left transition"
+                        >
+                            <div class="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                ${escapeHTML(displayName.charAt(0).toUpperCase())}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <p class="text-xs font-bold text-slate-900 truncate">${escapeHTML(displayName)}</p>
+                                    ${admin ? '<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase">Admin</span>' : ''}
+                                </div>
+                                <p class="text-[11px] text-slate-500 truncate">${escapeHTML(email)}</p>
+                            </div>
+                        </button>
+                    `;
+                })
+                .join('');
+
+            chooserAccountList.querySelectorAll('button[data-choose-email]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const chosenEmail = btn.getAttribute('data-choose-email');
+                    attemptGoogleLogin(chosenEmail);
+                });
+            });
+
+            googleChooserModal.classList.remove('hidden');
+        }
+
+        settingsGearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (settingsMenuContainer && !settingsMenuContainer.contains(e.target)) {
+                settingsDropdown.classList.add('hidden');
+            }
+        });
+
+        toggleAddUserBtn.addEventListener('click', () => {
+            const isAdmin = isPreviewSandbox
+                ? previewRole === 'admin'
+                : (userProfile && isAdminEmail(userProfile.email));
+            if (!userProfile || !isAdmin) return;
+            settingsDropdown.classList.add('hidden');
+            state.rightPanelMode = 'addUser';
+            state.mobileView = 'detail';
+            syncMobilePaneVisibility();
+            renderDetailPane();
+            setTimeout(() => {
+                const nameInput = document.getElementById('right-pane-user-name-input');
+                if (nameInput) nameInput.focus();
+            }, 40);
+        });
+
+        toggleClearDataBtn.addEventListener('click', () => {
+            const isAdmin = isPreviewSandbox
+                ? previewRole === 'admin'
+                : (userProfile && isAdminEmail(userProfile.email));
+            if (!userProfile || !isAdmin) return;
+            settingsDropdown.classList.add('hidden');
+            state.rightPanelMode = 'clearData';
+            state.mobileView = 'detail';
+            syncMobilePaneVisibility();
+            renderDetailPane();
+        });
+
+        floatingAdminViewBtn.addEventListener('click', () => switchPreviewRole('admin'));
+        floatingUserViewBtn.addEventListener('click', () => switchPreviewRole('user'));
+
+        logoutBtn.addEventListener('click', async () => {
+            settingsDropdown.classList.add('hidden');
+            stopFirestoreSync();
+            if (auth) {
+                try {
+                    await signOut(auth);
+                } catch (err) {
+                    console.error('Firebase signOut error:', err);
+                }
+            }
+            userProfile = null;
+            state.rightPanelMode = 'tasklet';
+            state.mobileView = 'list';
+            syncMobilePaneVisibility();
+            saveSession();
+            updateUserProfileUI();
+            showToast('Logged out of NIWAS Tasklet.');
+        });
+
+        googleSigninBtn.addEventListener('click', () => {
+            if (hasValidFirebaseConfig && auth) {
+                triggerFirebaseGoogleSignIn();
+            } else {
+                openGoogleAccountChooser();
+            }
+        });
+
+        closeChooserBtn.addEventListener('click', () => {
+            googleChooserModal.classList.add('hidden');
+        });
+
+        customGoogleEmailForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            attemptGoogleLogin(googleEmailVerifyInput.value);
+        });
+
+        // =========================================================================
+        // PERSISTENCE & SEED DATA
+        // =========================================================================
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        state.tasklets = parsed;
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to read localStorage:', err);
+            }
+
+            // Seed realistic initial tasklets if storage is empty and Firebase is not yet populated
+            const now = new Date();
+            const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+            const tomorrow = new Date(now.getTime() + 26 * 60 * 60 * 1000);
+            const yesterday = new Date(now.getTime() - 20 * 60 * 60 * 1000);
+            const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+            state.tasklets = [
+                {
+                    id: 'tsk-1',
+                    seq: 1,
+                    title: 'Finalize Q4 cloud infrastructure migration plan',
+                    deadlineISO: inTwoHours.toISOString(),
+                    status: 'Active',
+                    description: 'Review VPC peering rules, confirm database failover SLAs, and sign off on production cutover window with DevOps.',
+                    resolvedAtISO: null,
+                    createdBy: 'Director',
+                    createdAtISO: twoDaysAgo.toISOString()
+                },
+                {
+                    id: 'tsk-2',
+                    seq: 2,
+                    title: 'Submit vendor security compliance audit',
+                    deadlineISO: yesterday.toISOString(),
+                    status: 'Active',
+                    description: '',
+                    resolvedAtISO: null,
+                    createdBy: 'Director',
+                    createdAtISO: twoDaysAgo.toISOString()
+                },
+                {
+                    id: 'tsk-3',
+                    seq: 3,
+                    title: 'Prepare sprint retrospective deck',
+                    deadlineISO: tomorrow.toISOString(),
+                    status: 'Active',
+                    description: 'Gather velocity metrics and highlight key blockers resolved during the release cycle.',
+                    resolvedAtISO: null,
+                    createdBy: 'Director',
+                    createdAtISO: now.toISOString()
+                },
+                {
+                    id: 'tsk-4',
+                    seq: 4,
+                    title: 'Audit legacy API deprecation endpoints',
+                    deadlineISO: twoDaysAgo.toISOString(),
+                    status: 'Closed',
+                    description: 'Verified zero external traffic on v1 endpoints and decommissioned legacy gateway routes.',
+                    resolvedAtISO: yesterday.toISOString(),
+                    createdBy: 'Director',
+                    createdAtISO: twoDaysAgo.toISOString()
+                }
+            ];
+            saveToLocalStorage();
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasklets));
+            } catch (err) {
+                console.error('Failed to save to localStorage:', err);
+            }
+        }
+
+        // =========================================================================
+        // DATE, STATUS & WORD COUNT HELPERS
+        // =========================================================================
+        function isOverdue(tasklet) {
+            if (tasklet.status !== 'Active') return false;
+            return new Date(tasklet.deadlineISO).getTime() < Date.now();
+        }
+
+        function getEffectiveStatus(tasklet) {
+            if (tasklet.status === 'Closed') return 'Closed';
+            if (tasklet.status === 'Abandoned') return 'Abandoned';
+            return isOverdue(tasklet) ? 'Overdue' : 'Active';
+        }
+
+        function formatDateDDMMYY(isoString) {
+            if (!isoString) return '--';
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '--';
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = String(d.getFullYear()).slice(-2);
+            return `${dd}-${mm}-${yy}`;
+        }
+
+        function formatTimeHHMM(isoString) {
+            if (!isoString) return '--:--';
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '--:--';
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${hh}:${min}`;
+        }
+
+        function formatDeadline(isoString) {
+            return `${formatDateDDMMYY(isoString)} at ${formatTimeHHMM(isoString)}`;
+        }
+
+        function countWords(text) {
+            const trimmed = (text || '').trim();
+            if (!trimmed) return 0;
+            return trimmed.split(/\s+/).length;
+        }
+
+        function enforceWordLimit(text, maxWords) {
+            const trimmedStart = text.replace(/^\s+/, '');
+            if (!trimmedStart) return '';
+            const words = trimmedStart.trim().split(/\s+/);
+            if (words.length <= maxWords) return text;
+            const matches = [...text.matchAll(/\S+/g)];
+            if (matches.length > maxWords) {
+                return text.slice(0, matches[maxWords].index).trimEnd();
+            }
+            return words.slice(0, maxWords).join(' ');
+        }
+
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function capitalizeFirst(str) {
+            if (!str) return '';
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // =========================================================================
+        // TOAST NOTIFICATIONS & CONFIRMATION MODAL
+        // =========================================================================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            let containerStyle = 'bg-slate-900 text-white border-slate-800';
+            let indicatorHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>';
+
+            if (type === 'error') {
+                containerStyle = 'bg-rose-600 text-white border-rose-500';
+                indicatorHTML = '<span class="w-2 h-2 rounded-full bg-rose-200 shrink-0"></span>';
+            } else if (type === 'closed') {
+                containerStyle = 'bg-emerald-700 text-white border-emerald-600';
+                indicatorHTML = `
+                    <svg class="w-4 h-4 text-emerald-200 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                    </svg>`;
+            } else if (type === 'abandoned') {
+                containerStyle = 'bg-amber-700 text-white border-amber-600';
+                indicatorHTML = `
+                    <svg class="w-4 h-4 text-amber-200 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                    </svg>`;
+            }
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-lg border text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 transform translate-y-2 opacity-0 ${containerStyle}`;
+            toast.innerHTML = `
+                ${indicatorHTML}
+                <span>${escapeHTML(message)}</span>
+            `;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2800);
+        }
+
+        function openConfirmDialog({ title, message, confirmLabel, variant, onConfirm }) {
+            confirmTitle.textContent = title;
+            confirmMessage.textContent = message;
+            confirmProceedBtn.textContent = confirmLabel;
+            pendingConfirmCallback = onConfirm;
+
+            if (variant === 'danger') {
+                confirmIconWrap.className = 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-rose-100 text-rose-600';
+                confirmIconWrap.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>`;
+                confirmProceedBtn.className = 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold shadow-sm transition';
+            } else {
+                confirmIconWrap.className = 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600';
+                confirmIconWrap.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                    </svg>`;
+                confirmProceedBtn.className = 'px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition';
+            }
+
+            confirmModal.classList.remove('hidden');
+        }
+
+        function closeConfirmDialog() {
+            confirmModal.classList.add('hidden');
+            pendingConfirmCallback = null;
+        }
+
+        confirmCancelBtn.addEventListener('click', closeConfirmDialog);
+        confirmProceedBtn.addEventListener('click', () => {
+            if (typeof pendingConfirmCallback === 'function') {
+                pendingConfirmCallback();
+            }
+            closeConfirmDialog();
+        });
+
+        // =========================================================================
+        // FILTERING, SEARCH & PAGINATION
+        // =========================================================================
+        function getStatusCounts() {
+            const counts = {
+                All: state.tasklets.length,
+                Overdue: 0,
+                Active: 0,
+                Abandoned: 0,
+                Closed: 0
+            };
+            state.tasklets.forEach((t) => {
+                const eff = getEffectiveStatus(t);
+                if (counts[eff] !== undefined) {
+                    counts[eff]++;
+                }
+            });
+            return counts;
+        }
+
+        function getFilteredTasklets() {
+            const tokens = state.searchQuery
+                .trim()
+                .toLowerCase()
+                .split(/\s+/)
+                .filter(Boolean);
+
+            return state.tasklets
+                .filter((t) => {
+                    const eff = getEffectiveStatus(t);
+                    if (state.activeFilter !== 'All' && eff !== state.activeFilter) {
+                        return false;
+                    }
+                    if (tokens.length > 0) {
+                        const searchableText = [
+                            `#${t.seq}`,
+                            String(t.seq),
+                            t.title || '',
+                            t.description || ''
+                        ]
+                            .join(' ')
+                            .toLowerCase();
+
+                        return tokens.every((token) => searchableText.includes(token));
+                    }
+                    return true;
+                })
+                .sort((a, b) => b.seq - a.seq);
+        }
+
+        // =========================================================================
+        // RENDERING: LEFT PANE (TABS, LIST, PAGINATION)
+        // =========================================================================
+        function syncMobilePaneVisibility() {
+            const isDetailOnMobile = state.mobileView === 'detail';
+            if (isDetailOnMobile) {
+                listPaneEl.classList.add('hidden', 'lg:flex');
+                detailPaneEl.classList.remove('hidden');
+                detailPaneEl.classList.add('flex');
+            } else {
+                listPaneEl.classList.remove('hidden');
+                listPaneEl.classList.add('flex');
+                detailPaneEl.classList.add('hidden', 'lg:flex');
+                detailPaneEl.classList.remove('flex');
+            }
+        }
+
+        function renderFilterTabs() {
+            const counts = getStatusCounts();
+            const tabs = ['All', 'Overdue', 'Active', 'Abandoned', 'Closed'];
+
+            filterTabsEl.innerHTML = tabs
+                .map((tab) => {
+                    const isActive = state.activeFilter === tab;
+                    const count = counts[tab] || 0;
+
+                    let activeTabClass = 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25 ring-1 ring-emerald-600';
+                    let badgeClass = 'bg-slate-200/80 text-slate-600';
+
+                    if (isActive) {
+                        if (tab === 'All') {
+                            activeTabClass = 'bg-blue-600 text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-600';
+                            badgeClass = 'bg-white text-blue-700';
+                        } else if (tab === 'Overdue') {
+                            activeTabClass = 'bg-rose-600 text-white shadow-sm shadow-rose-600/25 ring-1 ring-rose-600';
+                            badgeClass = 'bg-white text-rose-700';
+                        } else if (tab === 'Abandoned') {
+                            activeTabClass = 'bg-amber-600 text-white shadow-sm shadow-amber-600/25 ring-1 ring-amber-600';
+                            badgeClass = 'bg-white text-amber-800';
+                        } else if (tab === 'Closed') {
+                            activeTabClass = 'bg-slate-800 text-white shadow-sm shadow-slate-800/25 ring-1 ring-slate-800';
+                            badgeClass = 'bg-white text-slate-800';
+                        } else {
+                            activeTabClass = 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25 ring-1 ring-emerald-600';
+                            badgeClass = 'bg-white text-emerald-700';
+                        }
+                    } else if (tab === 'All') {
+                        badgeClass = 'bg-blue-100 text-blue-700';
+                    } else if (tab === 'Overdue' && count > 0) {
+                        badgeClass = 'bg-rose-100 text-rose-700';
+                    }
+
+                    const mobileGridSpan = (tab === 'Abandoned' || tab === 'Closed')
+                        ? 'col-span-3 sm:flex-1'
+                        : 'col-span-2 sm:flex-1';
+
+                    return `
+                        <button
+                            type="button"
+                            data-filter="${tab}"
+                            class="${mobileGridSpan} justify-center px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                                isActive
+                                    ? activeTabClass
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                            }"
+                        >
+                            <span class="truncate">${tab}</span>
+                            <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none shrink-0 ${badgeClass}">
+                                ${count}
+                            </span>
+                        </button>
+                    `;
+                })
+                .join('');
+
+            filterTabsEl.querySelectorAll('button[data-filter]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    state.activeFilter = btn.getAttribute('data-filter');
+                    state.currentPage = 1;
+                    state.showInlineWarning = false;
+                    state.mobileView = 'list';
+                    renderAll();
+                });
+            });
+        }
+
+        function renderTaskletList() {
+            const filtered = getFilteredTasklets();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+
+            if (state.currentPage > totalPages) {
+                state.currentPage = totalPages;
+            }
+
+            const startIndex = (state.currentPage - 1) * ITEMS_PER_PAGE;
+            const pageItems = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+            if (pageItems.length === 0) {
+                taskletListEl.innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-8 my-auto">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                            </svg>
+                        </div>
+                        <p class="text-sm font-semibold text-slate-700">No tasklets found</p>
+                        <p class="text-xs text-slate-400 mt-1 max-w-xs">
+                            ${state.searchQuery ? 'Try clearing your search query or switching filter tabs.' : 'Click "+ Add Tasklet" above to create a new deadline item.'}
+                        </p>
+                    </div>
+                `;
+            } else {
+                taskletListEl.innerHTML = pageItems
+                    .map((t) => {
+                        const eff = getEffectiveStatus(t);
+                        const isSelected = t.id === state.selectedId;
+                        const overdue = eff === 'Overdue';
+
+                        let statusPill = '';
+                        if (eff === 'Overdue') {
+                            statusPill = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-100 text-rose-700">Overdue</span>`;
+                        } else if (eff === 'Active') {
+                            statusPill = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-700">Active</span>`;
+                        } else if (eff === 'Closed') {
+                            statusPill = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-200 text-slate-700">Closed</span>`;
+                        } else if (eff === 'Abandoned') {
+                            statusPill = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800">Abandoned</span>`;
+                        }
+
+                        return `
+                            <button
+                                type="button"
+                                data-id="${t.id}"
+                                class="w-full text-left px-4 py-4 sm:py-3.5 transition flex items-start gap-3 hover:bg-slate-50/90 active:bg-slate-100/80 ${
+                                    isSelected ? 'bg-emerald-50/60 border-l-4 border-l-emerald-600' : 'border-l-4 border-l-transparent'
+                                }"
+                            >
+                                <span class="shrink-0 mt-0.5 px-2 py-0.5 rounded-lg text-xs font-bold ${
+                                    isSelected
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-slate-100 text-slate-600'
+                                }">
+                                    #${t.seq}
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <p class="text-sm font-semibold text-slate-900 line-clamp-2 sm:truncate">
+                                            ${escapeHTML(t.title)}
+                                        </p>
+                                        ${statusPill}
+                                    </div>
+                                    <div class="mt-1.5 flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-1.5 text-xs ${
+                                            overdue ? 'text-rose-600 font-semibold' : 'text-slate-500 font-medium'
+                                        }">
+                                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            <span>${formatDeadline(t.deadlineISO)}</span>
+                                        </div>
+                                        <span class="lg:hidden text-[11px] font-semibold text-emerald-700 flex items-center gap-0.5 shrink-0">
+                                            Open
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </div>
+                            </button>
+                        `;
+                    })
+                    .join('');
+
+                taskletListEl.querySelectorAll('button[data-id]').forEach((row) => {
+                    row.addEventListener('click', () => {
+                        state.selectedId = row.getAttribute('data-id');
+                        state.rightPanelMode = 'tasklet';
+                        state.mobileView = 'detail';
+                        state.showInlineWarning = false;
+                        renderAll();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    });
+                });
+            }
+
+            // Auto-pagination: show bar automatically only when items exceed 25
+            if (totalItems > ITEMS_PER_PAGE) {
+                paginationBarEl.classList.remove('hidden');
+                const showingFrom = startIndex + 1;
+                const showingTo = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+                paginationInfoEl.textContent = `Showing ${showingFrom}–${showingTo} of ${totalItems}`;
+                pageIndicatorEl.textContent = `${state.currentPage} / ${totalPages}`;
+                prevPageBtn.disabled = state.currentPage <= 1;
+                nextPageBtn.disabled = state.currentPage >= totalPages;
+            } else {
+                paginationBarEl.classList.add('hidden');
+            }
+        }
+
+        // =========================================================================
+        // RENDERING: RIGHT PANE (DETAIL & ACTION WORKSPACE OR ADD USER PANEL)
+        // =========================================================================
+        function renderAddUserRightPanel() {
+            detailPaneEl.innerHTML = `
+                <div class="flex-1 flex flex-col space-y-5 sm:space-y-6">
+                    <!-- Mobile Back Navigation Bar -->
+                    <div class="lg:hidden pb-2 border-b border-slate-100">
+                        <button
+                            id="mobile-back-from-user-btn"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 -ml-1 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200/70 transition"
+                        >
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                            <span>Back to Tasklets</span>
+                        </button>
+                    </div>
+
+                    <!-- Top Header -->
+                    <div class="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Add Authorized User</h2>
+                                <p class="text-xs text-slate-500 mt-0.5">Grant Google Sign-In access to a consultant or team member</p>
+                            </div>
+                        </div>
+                        <button
+                            id="close-right-add-user-btn"
+                            type="button"
+                            class="hidden lg:flex px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-600 transition items-center gap-1.5"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            <span>Back to Tasklet</span>
+                        </button>
+                    </div>
+
+                    <!-- Add User Form -->
+                    <form id="right-pane-add-user-form" class="space-y-4 max-w-lg" novalidate>
+                        <div>
+                            <label for="right-pane-user-name-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                                Name <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                id="right-pane-user-name-input"
+                                type="text"
+                                placeholder="e.g., Arjun Sharma"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-base sm:text-sm text-slate-900 outline-none transition"
+                                required
+                            >
+                            <p class="text-[11px] text-slate-400 mt-1">First letter automatically capitalizes.</p>
+                        </div>
+
+                        <div>
+                            <label for="right-pane-user-email-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                                Google / Gmail / Google Custom ID <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                id="right-pane-user-email-input"
+                                type="email"
+                                placeholder="e.g., consultant@spmniwas.in or user@gmail.com"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-base sm:text-sm text-slate-900 outline-none transition"
+                                required
+                            >
+                        </div>
+
+                        <div id="right-pane-user-error" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span id="right-pane-user-error-text"></span>
+                        </div>
+
+                        <div class="pt-1 flex items-center gap-2.5">
+                            <button
+                                type="submit"
+                                class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm shadow-emerald-600/20 transition flex items-center gap-1.5"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                                <span>Add User</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Authorized Users Directory -->
+                    <div class="pt-4 border-t border-slate-100 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Authorized Google Accounts</span>
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">${allowedUsers.length}</span>
+                        </div>
+                        <ul id="right-pane-allowed-users-list" class="divide-y divide-slate-100 border border-slate-200/80 rounded-2xl overflow-hidden bg-slate-50/40">
+                            ${allowedUsers
+                                .map((u) => {
+                                    const isHardcodedAdmin = isAdminEmail(u.email);
+                                    const displayName = u.name || deriveNameFromEmail(u.email);
+                                    return `
+                                        <li class="px-4 py-3 flex items-center justify-between gap-3 bg-white">
+                                            <div class="flex items-center gap-3 min-w-0">
+                                                <div class="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                                    ${escapeHTML(displayName.charAt(0).toUpperCase())}
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <p class="text-sm font-semibold text-slate-900 truncate">${escapeHTML(displayName)}</p>
+                                                    <p class="text-xs text-slate-500 truncate">${escapeHTML(u.email)}</p>
+                                                </div>
+                                            </div>
+                                            ${
+                                                isHardcodedAdmin
+                                                    ? '<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wide shrink-0">Admin</span>'
+                                                    : `<button type="button" data-remove-authorized-email="${escapeHTML(u.email)}" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 transition shrink-0">Remove</button>`
+                                            }
+                                        </li>
+                                    `;
+                                })
+                                .join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            const closeBtn = document.getElementById('close-right-add-user-btn');
+            const mobileBackUserBtn = document.getElementById('mobile-back-from-user-btn');
+            const formEl = document.getElementById('right-pane-add-user-form');
+            const nameInputEl = document.getElementById('right-pane-user-name-input');
+            const emailInputEl = document.getElementById('right-pane-user-email-input');
+            const errorBoxEl = document.getElementById('right-pane-user-error');
+            const errorTextEl = document.getElementById('right-pane-user-error-text');
+
+            closeBtn.addEventListener('click', () => {
+                state.rightPanelMode = 'tasklet';
+                renderDetailPane();
+            });
+
+            if (mobileBackUserBtn) {
+                mobileBackUserBtn.addEventListener('click', () => {
+                    state.rightPanelMode = 'tasklet';
+                    state.mobileView = 'list';
+                    syncMobilePaneVisibility();
+                });
+            }
+
+            formEl.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorBoxEl.classList.add('hidden');
+
+                const rawName = nameInputEl.value.trim();
+                const rawEmail = emailInputEl.value.trim().toLowerCase();
+
+                if (!rawName) {
+                    errorTextEl.textContent = 'Please enter the user’s Name.';
+                    errorBoxEl.classList.remove('hidden');
+                    nameInputEl.focus();
+                    return;
+                }
+
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!rawEmail || !emailPattern.test(rawEmail)) {
+                    errorTextEl.textContent = 'Please enter a valid Google, Gmail, or Google Workspace Custom ID.';
+                    errorBoxEl.classList.remove('hidden');
+                    emailInputEl.focus();
+                    return;
+                }
+
+                if (allowedUsers.some((u) => u.email === rawEmail)) {
+                    errorTextEl.textContent = `${rawEmail} is already authorized.`;
+                    errorBoxEl.classList.remove('hidden');
+                    emailInputEl.focus();
+                    return;
+                }
+
+                const formattedName = capitalizeFirst(rawName);
+                const newUserObj = {
+                    name: formattedName,
+                    email: rawEmail
+                };
+                allowedUsers.push(newUserObj);
+                await syncAuthorizedUserToCloud(newUserObj);
+                showToast(`User "${formattedName}" (${rawEmail}) added successfully.`);
+                renderAddUserRightPanel();
+            });
+
+            detailPaneEl.querySelectorAll('button[data-remove-authorized-email]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const targetEmail = btn.getAttribute('data-remove-authorized-email');
+                    allowedUsers = allowedUsers.filter((u) => u.email !== targetEmail);
+                    await removeAuthorizedUserFromCloud(targetEmail);
+                    showToast(`Removed ${targetEmail} from authorized users.`);
+                    renderAddUserRightPanel();
+                });
+            });
+        }
+
+        function renderClearDataRightPanel() {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${yyyy}-${mm}-${dd}`;
+
+            detailPaneEl.innerHTML = `
+                <div class="flex-1 flex flex-col space-y-5 sm:space-y-6">
+                    <!-- Mobile Back Navigation Bar -->
+                    <div class="lg:hidden pb-2 border-b border-slate-100">
+                        <button
+                            id="mobile-back-from-clear-btn"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 -ml-1 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200/70 transition"
+                        >
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                            <span>Back to Tasklets</span>
+                        </button>
+                    </div>
+
+                    <!-- Top Header -->
+                    <div class="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Clear Tasklet Data</h2>
+                                <p class="text-xs text-slate-500 mt-0.5">Permanently delete tasklets by date range or clear all records</p>
+                            </div>
+                        </div>
+                        <button
+                            id="close-right-clear-data-btn"
+                            type="button"
+                            class="hidden lg:flex px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-600 transition items-center gap-1.5"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            <span>Back to Tasklet</span>
+                        </button>
+                    </div>
+
+                    <!-- Date Selection Menu -->
+                    <div class="space-y-4 max-w-lg">
+                        <div>
+                            <label for="clear-data-mode-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                                Deletion Scope
+                            </label>
+                            <select
+                                id="clear-data-mode-select"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 text-base sm:text-sm text-slate-900 bg-white outline-none transition"
+                            >
+                                <option value="before">Delete tasklets on or before selected date</option>
+                                <option value="after">Delete tasklets from selected date onwards</option>
+                                <option value="all">Clear ALL tasklets (entire history)</option>
+                            </select>
+                        </div>
+
+                        <div id="clear-data-date-group">
+                            <label for="clear-data-date-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                                Reference Date <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                id="clear-data-date-input"
+                                type="date"
+                                value="${todayStr}"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 text-base sm:text-sm text-slate-900 outline-none transition"
+                            >
+                            <p class="text-[11px] text-slate-400 mt-1">Evaluated against each tasklet’s creation date.</p>
+                        </div>
+
+                        <!-- Live Preview Banner -->
+                        <div id="clear-data-preview-box" class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-3">
+                            <span class="text-xs font-medium text-slate-600">Matching tasklets to delete:</span>
+                            <span id="clear-data-match-count" class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-xs font-bold">0</span>
+                        </div>
+
+                        <div class="pt-1 flex items-center gap-2.5">
+                            <button
+                                id="execute-clear-data-btn"
+                                type="button"
+                                class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold shadow-sm shadow-rose-600/20 transition flex items-center gap-2"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                <span>Delete Selected Data</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const closeBtn = document.getElementById('close-right-clear-data-btn');
+            const mobileBackBtn = document.getElementById('mobile-back-from-clear-btn');
+            const modeSelect = document.getElementById('clear-data-mode-select');
+            const dateGroup = document.getElementById('clear-data-date-group');
+            const dateInput = document.getElementById('clear-data-date-input');
+            const matchCountEl = document.getElementById('clear-data-match-count');
+            const executeBtn = document.getElementById('execute-clear-data-btn');
+
+            function getMatchingTaskletsForDeletion() {
+                const mode = modeSelect.value;
+                if (mode === 'all') {
+                    return [...state.tasklets];
+                }
+                const dateVal = dateInput.value;
+                if (!dateVal) return [];
+                const [y, m, d] = dateVal.split('-').map(Number);
+                if (mode === 'before') {
+                    const cutoffEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+                    return state.tasklets.filter((t) => {
+                        const ts = new Date(t.createdAtISO || t.deadlineISO).getTime();
+                        return !isNaN(ts) && ts <= cutoffEnd;
+                    });
+                } else {
+                    const cutoffStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+                    return state.tasklets.filter((t) => {
+                        const ts = new Date(t.createdAtISO || t.deadlineISO).getTime();
+                        return !isNaN(ts) && ts >= cutoffStart;
+                    });
+                }
+            }
+
+            function refreshClearPreview() {
+                const isAll = modeSelect.value === 'all';
+                dateGroup.classList.toggle('hidden', isAll);
+                const matches = getMatchingTaskletsForDeletion();
+                matchCountEl.textContent = `${matches.length} of ${state.tasklets.length}`;
+                executeBtn.disabled = matches.length === 0;
+            }
+
+            modeSelect.addEventListener('change', refreshClearPreview);
+            dateInput.addEventListener('change', refreshClearPreview);
+            refreshClearPreview();
+
+            closeBtn.addEventListener('click', () => {
+                state.rightPanelMode = 'tasklet';
+                renderDetailPane();
+            });
+
+            if (mobileBackBtn) {
+                mobileBackBtn.addEventListener('click', () => {
+                    state.rightPanelMode = 'tasklet';
+                    state.mobileView = 'list';
+                    syncMobilePaneVisibility();
+                });
+            }
+
+            executeBtn.addEventListener('click', () => {
+                const matches = getMatchingTaskletsForDeletion();
+                if (matches.length === 0) return;
+
+                const isAll = modeSelect.value === 'all';
+                const scopeLabel = isAll
+                    ? `all ${matches.length} tasklet(s)`
+                    : `${matches.length} tasklet(s) (${modeSelect.value === 'before' ? 'on or before' : 'from'} ${formatDateDDMMYY(dateInput.value)})`;
+
+                openConfirmDialog({
+                    title: 'Permanently Delete Tasklet Data?',
+                    message: `This will permanently delete ${scopeLabel} from both local storage and cloud sync. This action cannot be undone.`,
+                    confirmLabel: `Delete ${matches.length} Tasklet${matches.length > 1 ? 's' : ''}`,
+                    variant: 'danger',
+                    onConfirm: async () => {
+                        const idsToDelete = new Set(matches.map((t) => t.id));
+                        state.tasklets = state.tasklets.filter((t) => !idsToDelete.has(t.id));
+                        saveToLocalStorage();
+
+                        if (canUseFirestore()) {
+                            await Promise.all(
+                                matches.map((t) =>
+                                    deleteDoc(doc(db, 'tasklets', t.id)).catch((err) =>
+                                        console.error('Failed to delete tasklet from Firestore:', t.id, err)
+                                    )
+                                )
+                            );
+                        }
+
+                        if (idsToDelete.has(state.selectedId)) {
+                            const remaining = getFilteredTasklets();
+                            state.selectedId = remaining.length > 0 ? remaining[0].id : (state.tasklets[0]?.id || null);
+                        }
+
+                        state.rightPanelMode = 'tasklet';
+                        state.mobileView = 'list';
+                        renderAll();
+                        showToast(`Deleted ${matches.length} tasklet${matches.length > 1 ? 's' : ''}.`);
+                    }
+                });
+            });
+        }
+
+        function renderDetailPane() {
+            const isAdmin = isPreviewSandbox
+                ? previewRole === 'admin'
+                : (userProfile && isAdminEmail(userProfile.email));
+            if (state.rightPanelMode === 'addUser' && isAdmin) {
+                renderAddUserRightPanel();
+                return;
+            }
+            if (state.rightPanelMode === 'clearData' && isAdmin) {
+                renderClearDataRightPanel();
+                return;
+            }
+
+            const tasklet = state.tasklets.find((t) => t.id === state.selectedId);
+
+            if (!tasklet) {
+                detailPaneEl.innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-8 my-auto">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-base font-bold text-slate-900">Select a Tasklet</h3>
+                        <p class="text-xs text-slate-500 mt-1.5 max-w-sm leading-relaxed">
+                            Choose any tasklet from the left list to inspect its deadline, record notes, or mark it as Closed or Abandoned.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const eff = getEffectiveStatus(tasklet);
+            const isEditable = eff === 'Active' || eff === 'Overdue';
+            const overdue = eff === 'Overdue';
+            const wordCount = countWords(tasklet.description);
+            const hasMinWords = wordCount >= MIN_WORDS;
+
+            if (isEditable) {
+                detailPaneEl.innerHTML = `
+                    <div class="flex-1 flex flex-col space-y-4 sm:space-y-5">
+                        <!-- Mobile Back Navigation Bar -->
+                        <div class="lg:hidden pb-2 border-b border-slate-100 flex items-center justify-between">
+                            <button
+                                id="mobile-back-to-list-btn"
+                                type="button"
+                                class="inline-flex items-center gap-1.5 px-3 py-2 -ml-1 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200/70 transition"
+                            >
+                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                                <span>Back to List</span>
+                            </button>
+                            <span class="text-[11px] font-medium text-slate-400">${state.activeFilter}</span>
+                        </div>
+
+                        <div class="space-y-4 sm:space-y-5">
+                            <!-- Top Meta Header -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 pb-3.5 sm:pb-4 border-b border-slate-100">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-1 rounded-xl bg-slate-900 text-white text-xs font-bold">
+                                        #${tasklet.seq}
+                                    </span>
+                                    <span class="px-2.5 py-1 rounded-xl text-xs font-bold ${
+                                        overdue
+                                            ? 'bg-rose-100 text-rose-700'
+                                            : 'bg-emerald-100 text-emerald-700'
+                                    }">
+                                        ${eff}
+                                    </span>
+                                </div>
+                                <div class="text-xs font-semibold flex items-center gap-1.5 ${
+                                    overdue ? 'text-rose-600' : 'text-slate-600'
+                                }">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>Due: ${formatDeadline(tasklet.deadlineISO)}</span>
+                                </div>
+                            </div>
+
+                            <!-- Tasklet Title -->
+                            <div class="pb-1 sm:pb-3">
+                                <h2 class="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+                                    ${escapeHTML(tasklet.title)}
+                                </h2>
+                            </div>
+
+                            <!-- Description Editor (50-word max, debounced auto-save, 16px on mobile) -->
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label for="detail-description-input" class="text-xs font-medium uppercase tracking-wider text-slate-400">
+                                        Description
+                                    </label>
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span id="autosave-status" class="text-slate-400 font-medium">Saved</span>
+                                        <span class="text-slate-300">•</span>
+                                        <span id="word-counter" class="font-semibold ${
+                                            wordCount >= MAX_WORDS ? 'text-amber-600' : 'text-slate-600'
+                                        }">
+                                            ${wordCount} / ${MAX_WORDS} words
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <textarea
+                                    id="detail-description-input"
+                                    rows="5"
+                                    placeholder="Summarize progress, outcome, or reason before closing or abandoning (min 3 words, max 50 words)..."
+                                    class="w-full p-3.5 sm:p-4 rounded-2xl border ${
+                                        state.showInlineWarning && !hasMinWords
+                                            ? 'border-rose-400 ring-2 ring-rose-500/20'
+                                            : 'border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                                    } text-base sm:text-sm text-slate-800 placeholder-slate-400 leading-relaxed outline-none transition resize-none"
+                                >${escapeHTML(tasklet.description || '')}</textarea>
+                                <p class="text-xs text-slate-500 text-left pt-0.5">
+                                    Created by <span class="font-semibold text-slate-700">${escapeHTML(tasklet.createdBy || (userProfile && userProfile.name) || 'NIWAS Member')}</span> on <span class="font-medium text-slate-600">${formatDeadline(tasklet.createdAtISO)}</span>
+                                </p>
+                            </div>
+
+                            <!-- Inline Warning Banner when Description has fewer than 3 words -->
+                            <div id="inline-description-warning" class="${
+                                state.showInlineWarning && !hasMinWords ? 'flex' : 'hidden'
+                            } p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium items-center gap-2.5">
+                                <svg class="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <span>Enter at least ${MIN_WORDS} words in Description to enable Abandoned / Close</span>
+                            </div>
+
+                            <!-- Action Buttons Directly Below Description Box -->
+                            <div class="pt-3 border-t border-slate-100 grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-end gap-2.5 sm:gap-3">
+                                <button
+                                    id="abandon-tasklet-btn"
+                                    type="button"
+                                    class="w-full sm:w-auto justify-center px-4 py-3 sm:py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm font-semibold transition flex items-center gap-1.5"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                    </svg>
+                                    <span>Abandoned</span>
+                                </button>
+                                <button
+                                    id="close-tasklet-btn"
+                                    type="button"
+                                    class="w-full sm:w-auto justify-center px-5 py-3 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm shadow-emerald-600/20 transition flex items-center gap-1.5"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    <span>Close</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const mobileBackBtn = document.getElementById('mobile-back-to-list-btn');
+                if (mobileBackBtn) {
+                    mobileBackBtn.addEventListener('click', () => {
+                        state.mobileView = 'list';
+                        syncMobilePaneVisibility();
+                    });
+                }
+
+                // Wire Description Input (50-word cap + 450ms debounce + on blur)
+                const descInput = document.getElementById('detail-description-input');
+                const wordCounterEl = document.getElementById('word-counter');
+                const autosaveStatusEl = document.getElementById('autosave-status');
+                const inlineWarningEl = document.getElementById('inline-description-warning');
+
+                function commitDescription(val) {
+                    tasklet.description = val;
+                    syncTaskletToCloud(tasklet);
+                    if (autosaveStatusEl) {
+                        autosaveStatusEl.textContent = 'Saved';
+                        autosaveStatusEl.className = 'text-emerald-600 font-medium';
+                    }
+                }
+
+                descInput.addEventListener('input', () => {
+                    const capped = enforceWordLimit(descInput.value, MAX_WORDS);
+                    if (capped !== descInput.value) {
+                        descInput.value = capped;
+                    }
+                    const count = countWords(capped);
+                    wordCounterEl.textContent = `${count} / ${MAX_WORDS} words`;
+                    wordCounterEl.className = `font-semibold ${count >= MAX_WORDS ? 'text-amber-600' : 'text-slate-600'}`;
+
+                    if (count >= MIN_WORDS && state.showInlineWarning) {
+                        state.showInlineWarning = false;
+                        inlineWarningEl.classList.add('hidden');
+                        inlineWarningEl.classList.remove('flex');
+                        descInput.classList.remove('border-rose-400', 'ring-2', 'ring-rose-500/20');
+                        descInput.classList.add('border-slate-200');
+                    }
+
+                    autosaveStatusEl.textContent = 'Saving...';
+                    autosaveStatusEl.className = 'text-slate-400 font-medium';
+
+                    clearTimeout(saveDebounceTimer);
+                    saveDebounceTimer = setTimeout(() => {
+                        commitDescription(capped);
+                    }, 450);
+                });
+
+                descInput.addEventListener('blur', () => {
+                    clearTimeout(saveDebounceTimer);
+                    const capped = enforceWordLimit(descInput.value, MAX_WORDS);
+                    descInput.value = capped;
+                    commitDescription(capped);
+                });
+
+                // Wire Abandoned & Close buttons
+                function attemptTransition(targetStatus) {
+                    clearTimeout(saveDebounceTimer);
+                    const latestDesc = enforceWordLimit(descInput.value, MAX_WORDS);
+                    commitDescription(latestDesc);
+
+                    if (countWords(latestDesc) < MIN_WORDS) {
+                        state.showInlineWarning = true;
+                        inlineWarningEl.classList.remove('hidden');
+                        inlineWarningEl.classList.add('flex');
+                        descInput.classList.remove('border-slate-200');
+                        descInput.classList.add('border-rose-400', 'ring-2', 'ring-rose-500/20');
+                        descInput.focus();
+                        return;
+                    }
+
+                    const isAbandon = targetStatus === 'Abandoned';
+                    openConfirmDialog({
+                        title: isAbandon ? 'Mark Tasklet as Abandoned?' : 'Close Tasklet?',
+                        message: isAbandon
+                            ? `Are you sure you want to mark "#${tasklet.seq} ${tasklet.title}" as Abandoned? This action locks the description.`
+                            : `Are you sure you want to close "#${tasklet.seq} ${tasklet.title}"? This action locks the description.`,
+                        confirmLabel: isAbandon ? 'Yes, Abandon' : 'Yes, Close',
+                        variant: isAbandon ? 'danger' : 'primary',
+                        onConfirm: () => {
+                            tasklet.status = targetStatus;
+                            tasklet.resolvedAtISO = new Date().toISOString();
+                            state.showInlineWarning = false;
+                            state.mobileView = 'list';
+                            syncTaskletToCloud(tasklet);
+                            renderAll();
+                            showToast(
+                                isAbandon
+                                    ? `Tasklet #${tasklet.seq} abandoned.`
+                                    : `Tasklet #${tasklet.seq} closed.`,
+                                isAbandon ? 'abandoned' : 'closed'
+                            );
+                        }
+                    });
+                }
+
+                document.getElementById('abandon-tasklet-btn').addEventListener('click', () => {
+                    attemptTransition('Abandoned');
+                });
+
+                document.getElementById('close-tasklet-btn').addEventListener('click', () => {
+                    attemptTransition('Closed');
+                });
+            } else {
+                // Read-only view for Closed or Abandoned tasklets
+                const isClosed = tasklet.status === 'Closed';
+                const resolvedDate = formatDateDDMMYY(tasklet.resolvedAtISO || tasklet.deadlineISO);
+
+                detailPaneEl.innerHTML = `
+                    <div class="flex-1 flex flex-col justify-between space-y-5 sm:space-y-6">
+                        <div class="space-y-4 sm:space-y-5">
+                            <!-- Mobile Back Navigation Bar -->
+                            <div class="lg:hidden pb-2 border-b border-slate-100 flex items-center justify-between">
+                                <button
+                                    id="mobile-back-readonly-btn"
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 px-3 py-2 -ml-1 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200/70 transition"
+                                >
+                                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                    <span>Back to List</span>
+                                </button>
+                                <span class="text-[11px] font-medium text-slate-400">${state.activeFilter}</span>
+                            </div>
+
+                            <!-- Top Meta Header -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 pb-3.5 sm:pb-4 border-b border-slate-100">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-1 rounded-xl bg-slate-900 text-white text-xs font-bold">
+                                        #${tasklet.seq}
+                                    </span>
+                                    <span class="px-3 py-1 rounded-xl text-xs font-bold ${
+                                        isClosed
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : 'bg-amber-100 text-amber-800'
+                                    }">
+                                        ${isClosed ? `Closed on ${resolvedDate}` : `Abandoned on ${resolvedDate}`}
+                                    </span>
+                                </div>
+                                <div class="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>Original Deadline: ${formatDeadline(tasklet.deadlineISO)}</span>
+                                </div>
+                            </div>
+
+                            <!-- Title -->
+                            <div class="pb-1 sm:pb-3">
+                                <h2 class="text-lg sm:text-xl font-bold text-slate-900 leading-snug text-left">
+                                    ${escapeHTML(tasklet.title)}
+                                </h2>
+                            </div>
+
+                            <!-- Read-Only Description Box -->
+                            <div class="space-y-2">
+                                <span class="block text-xs font-medium uppercase tracking-wider text-slate-400 text-left">
+                                    Final Recorded Description (Read-Only)
+                                </span>
+                                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-sm text-slate-700 leading-relaxed text-left whitespace-pre-line">${escapeHTML((tasklet.description || 'No description provided.').trim())}</div>
+                                <p class="text-xs text-slate-500 text-left pt-0.5">
+                                    Created by <span class="font-semibold text-slate-700">${escapeHTML(tasklet.createdBy || (userProfile && userProfile.name) || 'NIWAS Member')}</span> on <span class="font-medium text-slate-600">${formatDeadline(tasklet.createdAtISO)}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                            <span>This tasklet is archived and locked from further edits.</span>
+                            <span class="font-semibold text-slate-500">${countWords(tasklet.description)} words</span>
+                        </div>
+                    </div>
+                `;
+
+                const mobileBackReadonlyBtn = document.getElementById('mobile-back-readonly-btn');
+                if (mobileBackReadonlyBtn) {
+                    mobileBackReadonlyBtn.addEventListener('click', () => {
+                        state.mobileView = 'list';
+                        syncMobilePaneVisibility();
+                    });
+                }
+            }
+        }
+
+        function renderAll() {
+            syncMobilePaneVisibility();
+            renderFilterTabs();
+            renderTaskletList();
+            renderDetailPane();
+        }
+
+        // =========================================================================
+        // ADD TASKLET MODAL & VALIDATION
+        // =========================================================================
+        function openAddModal() {
+            addTaskletForm.reset();
+            addModalError.classList.add('hidden');
+
+            // Default date to today (YYYY-MM-DD) for convenience
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            deadlineDateInput.min = `${yyyy}-${mm}-${dd}`;
+            deadlineDateInput.value = `${yyyy}-${mm}-${dd}`;
+
+            addModal.classList.remove('hidden');
+            setTimeout(() => taskNameInput.focus(), 50);
+        }
+
+        function closeAddModal() {
+            addModal.classList.add('hidden');
+        }
+
+        // Auto-capitalize first letter as user types
+        taskNameInput.addEventListener('input', () => {
+            const val = taskNameInput.value;
+            if (val.length > 0 && val.charAt(0) !== val.charAt(0).toUpperCase()) {
+                const start = taskNameInput.selectionStart;
+                const end = taskNameInput.selectionEnd;
+                taskNameInput.value = capitalizeFirst(val);
+                taskNameInput.setSelectionRange(start, end);
+            }
+        });
+
+        // Submit form on Enter key inside the 2-line Task Name box
+        taskNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                addTaskletForm.requestSubmit();
+            }
+        });
+
+        addTaskletForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            addModalError.classList.add('hidden');
+
+            const rawName = taskNameInput.value.trim();
+            const dateVal = deadlineDateInput.value;
+            const timeVal = deadlineTimeInput.value;
+
+            if (!rawName) {
+                addModalErrorText.textContent = 'Please enter a Task Name.';
+                addModalError.classList.remove('hidden');
+                taskNameInput.focus();
+                return;
+            }
+
+            if (!dateVal || !timeVal) {
+                addModalErrorText.textContent = 'Both Deadline Date and Deadline Time are mandatory.';
+                addModalError.classList.remove('hidden');
+                return;
+            }
+
+            const [year, month, day] = dateVal.split('-').map(Number);
+            const [hours, minutes] = timeVal.split(':').map(Number);
+            const deadlineDateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+            if (isNaN(deadlineDateObj.getTime())) {
+                addModalErrorText.textContent = 'Invalid date or time selected.';
+                addModalError.classList.remove('hidden');
+                return;
+            }
+
+            if (deadlineDateObj.getTime() <= Date.now()) {
+                addModalErrorText.textContent = 'Deadline Date & Time cannot be in the past. Please choose a future time.';
+                addModalError.classList.remove('hidden');
+                return;
+            }
+
+            const maxSeq = state.tasklets.reduce((max, t) => Math.max(max, t.seq || 0), 0);
+            const nextSeq = maxSeq + 1;
+            const formattedTitle = capitalizeFirst(rawName);
+
+            const newTasklet = {
+                id: `tsk-${Date.now()}`,
+                seq: nextSeq,
+                title: formattedTitle,
+                deadlineISO: deadlineDateObj.toISOString(),
+                status: 'Active',
+                description: '',
+                resolvedAtISO: null,
+                createdBy: (userProfile && userProfile.name ? userProfile.name : 'Director').trim(),
+                createdAtISO: new Date().toISOString()
+            };
+
+            state.tasklets.unshift(newTasklet);
+            state.activeFilter = 'Active';
+            state.currentPage = 1;
+            state.selectedId = newTasklet.id;
+            state.rightPanelMode = 'tasklet';
+            state.mobileView = 'list';
+            state.showInlineWarning = false;
+
+            syncTaskletToCloud(newTasklet);
+            closeAddModal();
+            renderAll();
+            showToast(`Tasklet #${nextSeq} created.`);
+        });
+
+        openAddModalBtn.addEventListener('click', openAddModal);
+        closeAddModalBtn.addEventListener('click', closeAddModal);
+        cancelAddModalBtn.addEventListener('click', closeAddModal);
+
+        // =========================================================================
+        // SEARCH & PAGINATION CONTROLS
+        // =========================================================================
+        searchInput.addEventListener('input', () => {
+            state.searchQuery = searchInput.value;
+            state.currentPage = 1;
+            clearSearchBtn.classList.toggle('hidden', !state.searchQuery);
+            renderAll();
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            state.searchQuery = '';
+            state.currentPage = 1;
+            clearSearchBtn.classList.add('hidden');
+            renderAll();
+        });
+
+        prevPageBtn.addEventListener('click', () => {
+            if (state.currentPage > 1) {
+                state.currentPage--;
+                renderTaskletList();
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(getFilteredTasklets().length / ITEMS_PER_PAGE));
+            if (state.currentPage < totalPages) {
+                state.currentPage++;
+                renderTaskletList();
+            }
+        });
+
+        // =========================================================================
+        // INITIALIZATION & FIREBASE AUTH STATE OBSERVER
+        // =========================================================================
+        loadAllowedUsers();
+        loadSession();
+        loadFromStorage();
+        updateUserProfileUI();
+
+        const initialActive = getFilteredTasklets();
+        if (initialActive.length > 0) {
+            state.selectedId = initialActive[0].id;
+        } else if (state.tasklets.length > 0) {
+            const sorted = [...state.tasklets].sort((a, b) => b.seq - a.seq);
+            state.selectedId = sorted[0].id;
+        }
+        renderAll();
+
+        if (auth && hasValidFirebaseConfig && !isPreviewSandbox) {
+            onAuthStateChanged(auth, (fbUser) => {
+                if (fbUser && fbUser.email) {
+                    attemptGoogleLogin(fbUser.email, fbUser.displayName || '', fbUser.photoURL || '');
+                } else {
+                    stopFirestoreSync();
+                    userProfile = null;
+                    saveSession();
+                    updateUserProfileUI();
+                }
+            });
+        }
+
+        // Periodically re-evaluate overdue status every 30 seconds
+        setInterval(() => {
+            renderFilterTabs();
+            renderTaskletList();
+        }, 30000);
+    </script>
+</body>
+</html>

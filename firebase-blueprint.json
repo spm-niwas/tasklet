@@ -1,0 +1,203 @@
+{
+  "entities": {
+    "AuthorizedUser": {
+      "title": "AuthorizedUser",
+      "description": "A Google account allowlisted by the Admin to access NIWAS Tasklet.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Lowercase Google or Google Workspace email address.",
+          "maxLength": 160
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the authorized user.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "addedBy": {
+          "type": "string",
+          "description": "Email of the admin who added this user.",
+          "maxLength": 160
+        },
+        "createdAtISO": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 creation timestamp.",
+          "maxLength": 40
+        }
+      },
+      "required": ["email", "name"]
+    },
+    "UserPreference": {
+      "title": "UserPreference",
+      "description": "Per-user supervisor assignment and remembered default tasklet visibility.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Lowercase email of the user owning this preference.",
+          "maxLength": 160
+        },
+        "supervisorEmail": {
+          "type": "string",
+          "description": "Email of the assigned supervisor (or null if none).",
+          "maxLength": 160
+        },
+        "supervisorName": {
+          "type": "string",
+          "description": "Display name of the assigned supervisor (or null if none).",
+          "maxLength": 100
+        },
+        "defaultVisibility": {
+          "type": "string",
+          "enum": ["supervisor", "private"],
+          "description": "Remembered default visibility radio selection."
+        },
+        "defaultListScope": {
+          "type": "string",
+          "enum": ["all", "supervisor", "mine"],
+          "description": "Remembered list scope radio filter (Show all, Show supervisor, Show mine)."
+        },
+        "updatedAtISO": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 update timestamp.",
+          "maxLength": 40
+        }
+      },
+      "required": ["email", "defaultVisibility"]
+    },
+    "SequenceCounter": {
+      "title": "SequenceCounter",
+      "description": "Atomic global sequence counter for unique tasklet numbers.",
+      "type": "object",
+      "properties": {
+        "lastSeq": {
+          "type": "integer",
+          "description": "Latest globally assigned sequence number."
+        }
+      },
+      "required": ["lastSeq"]
+    },
+    "Tasklet": {
+      "title": "Tasklet",
+      "description": "A deadline-tracked tasklet item with creator/supervisor visibility and terminal state locking.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique tasklet document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "seq": {
+          "type": "integer",
+          "description": "Globally unique sequential numeric tasklet identifier."
+        },
+        "title": {
+          "type": "string",
+          "description": "Tasklet title.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "deadlineISO": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Mandatory future deadline timestamp in ISO 8601 format.",
+          "maxLength": 40
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Closed", "Abandoned"],
+          "description": "Lifecycle status of the tasklet."
+        },
+        "description": {
+          "type": "string",
+          "description": "Progress or resolution notes (3-50 words required before closing/abandoning).",
+          "maxLength": 1500
+        },
+        "resolvedAtISO": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when closed or abandoned, or null if active.",
+          "maxLength": 40
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "Display name of the user who created the tasklet.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdByEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Email of the creator.",
+          "maxLength": 160
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the creator.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAtISO": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 creation timestamp.",
+          "maxLength": 40
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["supervisor", "private"],
+          "description": "Whether the tasklet is shared with the tagged supervisor or private to creator."
+        },
+        "supervisorEmail": {
+          "type": "string",
+          "description": "Email of the tagged supervisor if visibility is supervisor, or null.",
+          "maxLength": 160
+        },
+        "supervisorName": {
+          "type": "string",
+          "description": "Display name of the tagged supervisor if visibility is supervisor, or null.",
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "id",
+        "seq",
+        "title",
+        "deadlineISO",
+        "status",
+        "description",
+        "createdBy",
+        "createdByEmail",
+        "createdByUid",
+        "createdAtISO",
+        "visibility"
+      ]
+    }
+  },
+  "firestore": {
+    "/authorized_users/{userEmail}": {
+      "schema": { "$ref": "#/entities/AuthorizedUser" },
+      "description": "Allowlisted Google accounts permitted to sign into NIWAS Tasklet and be selected as supervisors."
+    },
+    "/user_preferences/{userEmail}": {
+      "schema": { "$ref": "#/entities/UserPreference" },
+      "description": "Per-user supervisor assignment and remembered default visibility."
+    },
+    "/counters/{counterId}": {
+      "schema": { "$ref": "#/entities/SequenceCounter" },
+      "description": "Atomic global sequence counter for unique tasklet numbers."
+    },
+    "/tasklets/{taskletId}": {
+      "schema": { "$ref": "#/entities/Tasklet" },
+      "description": "Workspace tasklets visible only to creator and tagged supervisor."
+    }
+  }
+}
